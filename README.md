@@ -1,10 +1,10 @@
 # RyuSync
 
 <!-- Workspace Health Layer -->
-![Status](https://img.shields.io/badge/status-unintegrated-yellow)
-![Python](https://img.shields.io/badge/python-legacy-yellow)
-![Packaging](https://img.shields.io/badge/packaging-requirements.txt-yellow)
-![Action](https://img.shields.io/badge/action-deferred-gray)
+![Status](https://img.shields.io/badge/status-active-green)
+![Python](https://img.shields.io/badge/python-3.14-green)
+![Packaging](https://img.shields.io/badge/packaging-pyproject.toml-green)
+![Tests](https://img.shields.io/badge/tests-present-green)
 
 A macOS drag-and-drop organizer for Nintendo Switch game files (`.nsp` / `.xci`).
 
