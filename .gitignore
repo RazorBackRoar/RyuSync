@@ -1,0 +1,55 @@
+.DS_Store
+**/.DS_Store
+.venv/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+*.spec~
+
+# Release binaries — distribute via GitHub Releases
+*.dmg
+
+# Workspace symlinks — machine-local, do not commit
+skills
+.agent/
+.agents/
+
+# Session backups and local task files
+AGENTS.md.backup.*
+INSTRUCTIONS.md
+
+# Tooling caches
+.ty_cache/
+.ruff_cache/
+.pytest_cache/
+
+# ── Workspace standard hygiene ──
+.AppleDouble
+.LSOverride
+Icon?
+*.pyo
+*.pyd
+.mypy_cache/
+.ty/
+venv/
+env/
+*.spec.bak
+*.log
+*.tmp
+*.bak
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.mobileprovision
+
+# ── Coverage artifacts ──
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
