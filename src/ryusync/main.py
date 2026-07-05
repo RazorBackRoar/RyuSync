@@ -17,7 +17,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Any
 
-from .app_resources import get_resource_path
+from ryusync.app_resources import get_resource_path
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
