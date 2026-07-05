@@ -1,57 +1,105 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover
+    import tomli as tomllib  # type: ignore
+
+APP_NAME = "RyuSync"
+SPEC_DIR = Path(globals().get("SPECPATH", Path.cwd())).resolve()
+PROJECT_ROOT = SPEC_DIR
+MAIN_SCRIPT = PROJECT_ROOT / "src" / "ryusync" / "main.py"
+ICON_FILE = PROJECT_ROOT / "resources" / "RyuSync.icns"
+PYPROJECT = PROJECT_ROOT / "pyproject.toml"
+
+
+def get_project_version(default: str = "0.0.0") -> str:
+    if not PYPROJECT.exists():
+        return default
+    try:
+        with PYPROJECT.open("rb") as fp:
+            data = tomllib.load(fp)
+        return data["project"]["version"]
+    except Exception:
+        return default
+
+
+APP_VERSION = get_project_version()
+BUNDLE_ID = "com.RazorBackRoar.RyuSync"
+
 
 a = Analysis(
-    ['ryusync.py'],
-    pathex=[],
+    [str(MAIN_SCRIPT)],
+    pathex=[str(PROJECT_ROOT / "src")],
     binaries=[],
     datas=[
-        ('resources/nxx.png', 'resources'),
-        ('resources/RyuSync-icon-1024.png', 'resources'),
+        (str(PROJECT_ROOT / "resources"), "resources"),
+        (str(PROJECT_ROOT / "LICENSE"), "."),
     ],
     hiddenimports=[
-        'fuzzywuzzy',
-        'fuzzywuzzy.fuzz',
-        'fuzzywuzzy.process',
+        "shiboken6",
+        "PySide6.QtCore",
+        "PySide6.QtGui",
+        "PySide6.QtWidgets",
+        "fuzzywuzzy",
+        "fuzzywuzzy.fuzz",
+        "fuzzywuzzy.process",
+        "Levenshtein",
     ],
     hookspath=[],
-    hooksconfig={},
     runtime_hooks=[],
     excludes=[],
     noarchive=False,
-    optimize=0,
 )
-pyz = PYZ(a.pure)
+
+pyz = PYZ(a.pure, a.zipped_data, cipher=None)
 
 exe = EXE(
     pyz,
     a.scripts,
     [],
     exclude_binaries=True,
-    name='RyuSync',
+    name=APP_NAME,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     console=False,
     disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
+    argv_emulation=True,
+    target_arch="arm64",
     codesign_identity=None,
     entitlements_file=None,
 )
+
 coll = COLLECT(
     exe,
     a.binaries,
+    a.zipfiles,
     a.datas,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
-    name='RyuSync',
+    name=APP_NAME,
 )
+
 app = BUNDLE(
     coll,
-    name='RyuSync.app',
-    icon='resources/RyuSync.icns',
-    bundle_identifier='com.ryusync.app',
+    name=f"{APP_NAME}.app",
+    icon=str(ICON_FILE),
+    bundle_identifier=BUNDLE_ID,
+    info_plist={
+        "CFBundleName": APP_NAME,
+        "CFBundleDisplayName": APP_NAME,
+        "CFBundleIdentifier": BUNDLE_ID,
+        "CFBundleVersion": APP_VERSION,
+        "CFBundleShortVersionString": APP_VERSION,
+        "LSMinimumSystemVersion": "11.0",
+        "LSRequiresNativeExecution": True,
+        "LSApplicationCategoryType": "public.app-category.utilities",
+        "NSHighResolutionCapable": True,
+        "NSHumanReadableCopyright": "Copyright © 2026 RazorBackRoar. All rights reserved.",
+    },
 )

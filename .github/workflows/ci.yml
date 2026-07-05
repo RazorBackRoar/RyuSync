@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout RyuSync
+        uses: actions/checkout@v7
+        with:
+          path: app
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Sync
+        working-directory: app
+        run: uv sync --all-extras --dev
+
+      - name: Lint
+        working-directory: app
+        run: uv run ruff check .
+
+      - name: Type Check
+        working-directory: app
+        run: uv run ty check src --python-version 3.14
+
+      - name: Tests
+        working-directory: app
+        run: uv run pytest tests/ -q
