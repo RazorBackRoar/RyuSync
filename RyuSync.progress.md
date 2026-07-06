@@ -3,3 +3,4 @@
 [x] Task 3: Harden drop validation, filename sanitization, duplicate destinations, and user-readable errors (completed 2026-07-06)
 [x] Task 4: Refresh blue/red app icon assets (completed 2026-07-06)
 [x] Task 5: Add focused tests and rerun validation (completed 2026-07-06)
+[x] Task 6: Simplify icon to red/blue flowing linework without arrow/logo marks (completed 2026-07-06)
