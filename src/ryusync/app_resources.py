@@ -16,6 +16,11 @@ def get_resource_root(*, base_file: str | Path | None = None) -> Path:
     return Path(base_file).resolve().parent
 
 
+def get_resource_dir(*, base_file: str | Path | None = None) -> Path:
+    """Return the directory containing bundled resources."""
+    return get_resource_root(base_file=base_file) / "resources"
+
+
 def get_resource_path(name: str, *, base_file: str | Path | None = None) -> Path:
     """Return the expected path for a bundled resource."""
-    return get_resource_root(base_file=base_file) / "resources" / name
+    return get_resource_dir(base_file=base_file) / name
