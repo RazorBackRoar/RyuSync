@@ -15,7 +15,9 @@ from ryusync import (
     DragDropWindow,
     FolderProcessingWorker,
     is_protected_directory,
-    should_clean_file
+    sanitize_path_component,
+    should_clean_file,
+    unique_destination_path,
 )
 
 
@@ -33,9 +35,44 @@ def test_is_protected_directory_blocks_high_level_paths() -> None:
     assert is_protected_directory(Path.home()) is True
     assert is_protected_directory(Path.home() / "Desktop") is True
     assert is_protected_directory(Path.home() / "Downloads") is True
+    assert is_protected_directory(Path.home() / "Workspace") is True
+    assert is_protected_directory(Path.home() / "Workspace" / "Apps") is True
     
     # Non-protected subpath should be False
     assert is_protected_directory(Path.home() / "Documents" / "MyGames") is False
+
+
+def test_sanitize_path_component_prevents_hidden_traversal_and_control_chars() -> None:
+    """Generated filenames must remain single safe macOS path components."""
+    sanitized = sanitize_path_component(
+        "../.bad:name?\nwith\tspaces.nsp",
+        default="Game",
+        preserve_extension=True,
+    )
+
+    assert sanitized.endswith(".nsp")
+    assert not sanitized.startswith(".")
+    assert "/" not in sanitized
+    assert ":" not in sanitized
+    assert "?" not in sanitized
+    assert "\n" not in sanitized
+    assert "\t" not in sanitized
+
+    long_name = sanitize_path_component("A" * 260 + ".xci")
+    assert long_name.endswith(".xci")
+    assert len(long_name) <= 180
+
+
+def test_unique_destination_path_adds_predictable_suffix(tmp_path: Path) -> None:
+    """Duplicate destination files get _1/_2 suffixes rather than overwriting."""
+    destination = tmp_path / "Game.nsp"
+    destination.write_text("original")
+    source = tmp_path / "Incoming.nsp"
+    source.write_text("incoming")
+
+    assert unique_destination_path(destination, source).name == "Game_1.nsp"
+    (tmp_path / "Game_1.nsp").write_text("other")
+    assert unique_destination_path(destination, source).name == "Game_2.nsp"
 
 
 def test_should_clean_file_identifies_url_and_system_metadata() -> None:
@@ -50,6 +87,31 @@ def test_should_clean_file_identifies_url_and_system_metadata() -> None:
     assert should_clean_file(Path("game.nsp")) is False
     assert should_clean_file(Path("cover.jpg")) is False
     assert should_clean_file(Path("video.mp4")) is False
+
+
+def test_multi_drop_rejects_unsupported_files_without_moving_them(
+    tmp_path: Path,
+    qapp: QApplication,
+) -> None:
+    """Unsupported multi-drop files stay untouched and out of the staging folder."""
+    game_file = tmp_path / "Everhood [0100E20014028000][GME].nsp"
+    game_file.write_text("fake_game")
+    notes_file = tmp_path / "notes.txt"
+    notes_file.write_text("do not move")
+
+    window = DragDropWindow()
+    try:
+        queue_items = window._prepare_drop([game_file, notes_file])
+    finally:
+        window.close()
+
+    assert len(queue_items) == 1
+    temp_dir = queue_items[0][0]
+    assert temp_dir.name.startswith("ryusync_temp_")
+    assert (temp_dir / game_file.name).exists()
+    assert notes_file.exists()
+    assert notes_file.read_text() == "do not move"
+    assert not (temp_dir / notes_file.name).exists()
 
 
 def test_dry_mode_performs_zero_filesystem_mutations(tmp_path: Path, qapp: QApplication) -> None:

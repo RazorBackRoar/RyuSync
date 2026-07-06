@@ -13,6 +13,7 @@ import subprocess
 import sys
 import time
 import traceback
+import unicodedata
 from enum import Enum, auto
 from pathlib import Path
 from typing import Any
@@ -22,10 +23,17 @@ from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
+    QFrame,
+    QHBoxLayout,
     QLabel,
     QMainWindow,
     QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QSizePolicy,
     QStackedWidget,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -67,6 +75,15 @@ DEFAULT_SETTINGS = {
     "dry_run_enabled": False,
     "fuzzy_threshold": 70,
 }
+GAME_FILE_SUFFIXES = (".nsp", ".xci")
+ARCHIVE_SUFFIXES = (".rar", ".zip", ".7z")
+MAX_FILENAME_COMPONENT_LENGTH = 180
+CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
+INVALID_MAC_FILENAME_CHARS = '<>:"/\\|?*'
+
+
+class FileOperationError(OSError):
+    """Raised when a guarded file operation would be unsafe or invalid."""
 
 
 def load_settings() -> dict[str, Any]:
@@ -731,6 +748,111 @@ def get_clean_base_name(filename: str) -> str:
     return name if name else "Unknown Game"
 
 
+def sanitize_path_component(
+    name: str,
+    *,
+    default: str = "Unknown Name",
+    preserve_extension: bool = True,
+    max_length: int = MAX_FILENAME_COMPONENT_LENGTH,
+) -> str:
+    """Return a single safe macOS path component, never a path.
+
+    RyuSync generates names from user-provided file names. This helper strips
+    path traversal, control characters, hidden-file prefixes, invalid Finder
+    characters, and excess whitespace while preserving useful extensions.
+    """
+    raw_name = Path(str(name)).name
+    normalized = unicodedata.normalize("NFC", raw_name)
+    normalized = CONTROL_CHAR_RE.sub(" ", normalized)
+    for char in INVALID_MAC_FILENAME_CHARS:
+        normalized = normalized.replace(char, "_")
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+
+    if preserve_extension:
+        stem, extension = os.path.splitext(normalized)
+    else:
+        stem, extension = normalized, ""
+
+    stem = re.sub(r"\s+", " ", stem).strip(" .")
+    extension = CONTROL_CHAR_RE.sub("", extension).strip()
+    if extension and not re.fullmatch(r"\.[A-Za-z0-9][A-Za-z0-9._-]{0,15}", extension):
+        stem = f"{stem} {extension.lstrip('.')}".strip()
+        extension = ""
+
+    if not stem or stem in {".", ".."}:
+        stem = default
+    stem = stem.lstrip(".").strip() or default
+
+    room_for_stem = max(1, max_length - len(extension))
+    if len(stem) > room_for_stem:
+        stem = stem[:room_for_stem].rstrip(" .") or default[:room_for_stem]
+
+    result = f"{stem}{extension}".strip()
+    if result.startswith("."):
+        result = f"{default}{extension}"
+    return result or default
+
+
+def unique_destination_path(destination: Path, source: Path | None = None) -> Path:
+    """Return a non-overwriting destination by appending _1, _2, ... if needed."""
+    if not destination.exists():
+        return destination
+    if source is not None:
+        try:
+            if source.exists() and source.samefile(destination):
+                return destination
+        except OSError:
+            pass
+
+    stem = destination.stem or "Untitled"
+    suffix = destination.suffix
+    counter = 1
+    candidate = destination.with_name(f"{stem}_{counter}{suffix}")
+    while candidate.exists():
+        counter += 1
+        candidate = destination.with_name(f"{stem}_{counter}{suffix}")
+    return candidate
+
+
+def user_facing_error(error: BaseException) -> str:
+    """Translate low-level file exceptions into short messages suitable for UI."""
+    if isinstance(error, PermissionError):
+        return "Permission denied. Choose a folder RyuSync can read and write."
+    if isinstance(error, FileNotFoundError):
+        return "The selected file or folder is missing. Drop it again from Finder."
+    if isinstance(error, FileExistsError):
+        return "A destination file already exists. RyuSync did not overwrite it."
+    if isinstance(error, FileOperationError):
+        return str(error) or "RyuSync blocked an unsafe file operation."
+    if isinstance(error, OSError):
+        detail = error.strerror or str(error)
+        return f"macOS file operation failed: {detail}"
+    return "RyuSync could not complete the requested file operation."
+
+
+def resolve_safe_drop_path(path: Path) -> Path:
+    """Resolve a dropped filesystem item without following unsafe scope surprises."""
+    if path.is_symlink():
+        raise FileOperationError(
+            f"RyuSync does not process symlinks or aliases. Drop the original item: {path}"
+        )
+    try:
+        resolved = path.expanduser().resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"Dropped item no longer exists: {path}") from exc
+    except OSError as exc:
+        raise FileOperationError(f"Could not read dropped item: {path}") from exc
+    if resolved.name in {"", ".", ".."}:
+        raise FileOperationError(f"Invalid dropped path: {path}")
+    return resolved
+
+
+def is_supported_game_or_archive_file(path: Path) -> bool:
+    """Return True for file types RyuSync intentionally handles."""
+    suffix = path.suffix.lower()
+    return suffix in GAME_FILE_SUFFIXES or suffix in ARCHIVE_SUFFIXES
+
+
 def sanitize_filename(filename: str, folder_path: str | None = None) -> str:
     """
     Sanitize a string for use as a filename or folder name.
@@ -816,12 +938,21 @@ def sanitize_filename(filename: str, folder_path: str | None = None) -> str:
         clean_base_name = sanitize_possessive(clean_base_name)
         clean_base_name = smart_title_case(clean_base_name)  # Apply smart title casing
 
-        # Re-add extension if it was a file (though this function is mostly for folder names)
-        return f"{clean_base_name}{original_ext}" if original_ext else clean_base_name
+        # Re-add extension if it was a file, then force a safe single path component.
+        candidate = f"{clean_base_name}{original_ext}" if original_ext else clean_base_name
+        return sanitize_path_component(
+            candidate,
+            default="Unknown Name",
+            preserve_extension=bool(original_ext),
+        )
 
     except Exception as e:
         logging.error(f"Error sanitizing filename/folder name '{filename}': {e}")
-        return f"unknown{os.path.splitext(filename)[1].lower() or ''}"
+        return sanitize_path_component(
+            f"unknown{os.path.splitext(filename)[1].lower() or ''}",
+            default="unknown",
+            preserve_extension=True,
+        )
 
 
 def remove_versions_from_path(path: Path) -> Path:
@@ -913,8 +1044,14 @@ def is_protected_directory(path: Path) -> bool:
         _norm(home / "Documents"),
         _norm(home / "Downloads"),
         _norm(home / "Movies"),
+        _norm(home / "Workspace"),
+        _norm(home / "Workspace" / "Apps"),
         _norm(Path("/Users/home")),
         _norm(Path("/Users")),
+        _norm(Path("/Applications")),
+        _norm(Path("/Library")),
+        _norm(Path("/System")),
+        _norm(Path("/Volumes")),
         _norm(Path("/")),
     }
     return target in protected
@@ -964,52 +1101,77 @@ def is_path_safe_for_deletion(path: Path, directory: Path) -> bool:
 def safe_move(src: Path, dst: Path, allowed_roots: list[Path]) -> None:
     """Move source to destination only if both are inside allowed roots."""
     if not is_path_safe(src, allowed_roots):
-        logging.warning(f"Safety check failed: source path {src} is outside allowed roots {allowed_roots}. Skipping move.")
-        return
+        raise FileOperationError(
+            f"Blocked move because the source is outside the selected scope: {src}"
+        )
     if not is_path_safe(dst, allowed_roots):
-        logging.warning(f"Safety check failed: destination path {dst} is outside allowed roots {allowed_roots}. Skipping move.")
-        return
+        raise FileOperationError(
+            f"Blocked move because the destination is outside the selected scope: {dst}"
+        )
+    if not src.exists():
+        raise FileNotFoundError(f"Source file or folder is missing: {src}")
+    if dst.exists():
+        try:
+            if src.samefile(dst):
+                return
+        except OSError:
+            pass
+        raise FileExistsError(f"Destination already exists: {dst}")
     shutil.move(str(src), str(dst))
 
 
 def safe_unlink(path: Path, allowed_roots: list[Path], directory: Path) -> None:
     """Unlink file only if it is within allowed roots and is safe for deletion."""
     if not is_path_safe(path, allowed_roots):
-        logging.warning(f"Safety check failed: path {path} is outside allowed roots {allowed_roots}. Skipping deletion.")
-        return
+        raise FileOperationError(
+            f"Blocked deletion outside the selected scope: {path}"
+        )
     if not is_path_safe_for_deletion(path, directory):
-        logging.warning(f"Safety check failed: path {path} is outside processed directory {directory}. Skipping deletion.")
-        return
+        raise FileOperationError(
+            f"Blocked deletion outside the processed folder: {path}"
+        )
     path.unlink()
 
 
 def safe_rename(src: Path, dst: Path, allowed_roots: list[Path]) -> Path:
     """Rename path to target only if both are inside allowed roots."""
     if not is_path_safe(src, allowed_roots):
-        logging.warning(f"Safety check failed: source path {src} is outside allowed roots {allowed_roots}. Skipping rename.")
-        return src
+        raise FileOperationError(
+            f"Blocked rename because the source is outside the selected scope: {src}"
+        )
     if not is_path_safe(dst, allowed_roots):
-        logging.warning(f"Safety check failed: destination path {dst} is outside allowed roots {allowed_roots}. Skipping rename.")
-        return src
+        raise FileOperationError(
+            f"Blocked rename because the destination is outside the selected scope: {dst}"
+        )
+    if dst.exists():
+        try:
+            if src.samefile(dst):
+                return src
+        except OSError:
+            pass
+        raise FileExistsError(f"Destination already exists: {dst}")
     return src.rename(dst)
 
 
 def safe_mkdir(path: Path, allowed_roots: list[Path], exist_ok: bool = True) -> None:
     """Create directory inside allowed roots."""
     if not is_path_safe(path, allowed_roots):
-        logging.warning(f"Safety check failed: path {path} is outside allowed roots {allowed_roots}. Skipping directory creation.")
-        return
+        raise FileOperationError(
+            f"Blocked folder creation outside the selected scope: {path}"
+        )
     path.mkdir(parents=True, exist_ok=exist_ok)
 
 
 def safe_rmdir(path: Path, allowed_roots: list[Path], directory: Path) -> None:
     """Remove empty directory only if safe for deletion."""
     if not is_path_safe(path, allowed_roots):
-        logging.warning(f"Safety check failed: path {path} is outside allowed roots {allowed_roots}. Skipping directory deletion.")
-        return
+        raise FileOperationError(
+            f"Blocked folder removal outside the selected scope: {path}"
+        )
     if not is_path_safe_for_deletion(path, directory):
-        logging.warning(f"Safety check failed: path {path} is outside processed directory {directory}. Skipping directory deletion.")
-        return
+        raise FileOperationError(
+            f"Blocked folder removal outside the processed folder: {path}"
+        )
     path.rmdir()
 
 
@@ -1034,7 +1196,6 @@ def remove_empty_directories(path: Path, allowed_roots: list[Path], directory: P
 
 # Archive formats RyuSync can auto-extract before organizing. Matched by suffix,
 # so "Game [id].nsp.rar" is an archive (suffix .rar), not a game file.
-ARCHIVE_SUFFIXES = (".rar", ".zip", ".7z")
 
 
 def is_archive_file(path: Path) -> bool:
@@ -1807,7 +1968,9 @@ class FolderProcessingWorker(QThread):
             final_name = re.sub(r"\(\s*\)", "", final_name)
             final_name = final_name.strip()
 
-            return final_name
+            return sanitize_path_component(
+                final_name, default="Unknown Game", preserve_extension=True
+            )
 
         except Exception as e:
             logging.error(
@@ -1858,8 +2021,9 @@ class DragDropWindow(QMainWindow):
         self.worker.file_counts.connect(self._on_worker_file_counts)
 
         # Window configuration
-        self.setWindowTitle("RyuSync (Dry Mode - Read Only)" if self.dry_run_enabled else "RyuSync (Regular Mode)")
-        self.setFixedSize(520, 610)
+        self.setWindowTitle("RyuSync")
+        self.setMinimumSize(700, 660)
+        self.resize(740, 700)
         self.setAcceptDrops(True)
 
         # Center the window on the screen
@@ -1867,32 +2031,250 @@ class DragDropWindow(QMainWindow):
 
         # Create central widget and layout
         central_widget = QWidget()
+        central_widget.setObjectName("appRoot")
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setContentsMargins(22, 20, 22, 20)
+        main_layout.setSpacing(14)
+        central_widget.setStyleSheet(
+            """
+            QWidget#appRoot {
+                background: #f5f6f8;
+                color: #1f2328;
+                font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+                             "Helvetica Neue", Arial, sans-serif;
+            }
+            QFrame#panel {
+                background: rgba(255, 255, 255, 0.92);
+                border: 1px solid rgba(30, 44, 64, 0.12);
+                border-radius: 18px;
+            }
+            QFrame#dropPanel {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #f9fbff, stop:0.52 #ffffff, stop:1 #fff6f2);
+                border: 2px dashed rgba(56, 106, 190, 0.34);
+                border-radius: 22px;
+            }
+            QLabel#titleLabel {
+                color: #101418;
+                font-size: 28px;
+                font-weight: 700;
+            }
+            QLabel#subtitleLabel {
+                color: #687080;
+                font-size: 13px;
+            }
+            QLabel#sectionLabel {
+                color: #2a2f38;
+                font-size: 15px;
+                font-weight: 650;
+            }
+            QLabel#mutedLabel {
+                color: #697386;
+                font-size: 12px;
+            }
+            QLabel#dropTitle {
+                color: #101418;
+                font-size: 22px;
+                font-weight: 700;
+            }
+            QLabel#dropHint {
+                color: #596271;
+                font-size: 13px;
+            }
+            QLabel#modePill {
+                border-radius: 11px;
+                font-size: 12px;
+                font-weight: 700;
+                padding: 5px 10px;
+            }
+            QLabel#scopeLabel {
+                background: #f7f8fb;
+                border: 1px solid #e4e8ef;
+                border-radius: 10px;
+                color: #3d4654;
+                font-size: 12px;
+                padding: 8px 10px;
+            }
+            QPushButton {
+                background: #ffffff;
+                border: 1px solid #d9dee7;
+                border-radius: 10px;
+                color: #1f2937;
+                font-weight: 600;
+                padding: 7px 12px;
+            }
+            QPushButton:hover {
+                background: #f1f5fb;
+                border-color: #c6d0df;
+            }
+            QCheckBox {
+                color: #303744;
+                font-size: 13px;
+                font-weight: 600;
+                spacing: 8px;
+            }
+            QProgressBar {
+                background: #edf1f6;
+                border: 1px solid #dce3ed;
+                border-radius: 7px;
+                height: 10px;
+                text-align: center;
+                color: transparent;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #1578d4, stop:1 #ff4d45);
+                border-radius: 7px;
+            }
+            QTextEdit {
+                background: #10151d;
+                border: 1px solid #263141;
+                border-radius: 14px;
+                color: #f5f7fb;
+                font-family: "SF Mono", Menlo, Monaco, monospace;
+                font-size: 13px;
+                padding: 16px;
+                selection-background-color: #2f6feb;
+            }
+            """
+        )
+
+        header = QFrame()
+        header.setObjectName("panel")
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(16, 14, 16, 14)
+        header_layout.setSpacing(14)
+
+        self.header_icon = QLabel()
+        self.header_icon.setFixedSize(54, 54)
+        icon_path = get_resource_path("RyuSync-icon-1024.png", base_file=__file__)
+        if icon_path.exists():
+            icon_pixmap = QPixmap(str(icon_path))
+            if not icon_pixmap.isNull():
+                self.header_icon.setPixmap(
+                    icon_pixmap.scaled(
+                        54,
+                        54,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                )
+        header_layout.addWidget(self.header_icon)
+
+        title_column = QVBoxLayout()
+        title_column.setSpacing(2)
+        title_label = QLabel("RyuSync")
+        title_label.setObjectName("titleLabel")
+        subtitle_label = QLabel("Switch file organizer for macOS")
+        subtitle_label.setObjectName("subtitleLabel")
+        title_column.addWidget(title_label)
+        title_column.addWidget(subtitle_label)
+        header_layout.addLayout(title_column, 1)
+
+        self.dry_mode_checkbox = QCheckBox("Dry Mode")
+        self.dry_mode_checkbox.setChecked(self.dry_run_enabled)
+        self.dry_mode_checkbox.toggled.connect(self._on_dry_mode_toggled)
+        header_layout.addWidget(self.dry_mode_checkbox)
+
+        open_logs_button = QPushButton("Open Logs")
+        open_logs_button.clicked.connect(self._open_log_folder)
+        header_layout.addWidget(open_logs_button)
+        main_layout.addWidget(header)
 
         # Stacked widget: page 0 = splash image, page 1 = results
         self.stacked_widget = QStackedWidget()
-        main_layout.addWidget(self.stacked_widget)
+        self.stacked_widget.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        main_layout.addWidget(self.stacked_widget, 1)
         self.setup_window_image()
         self.setup_summary_display()
 
-        # Mode label indicating Dry or Regular mode
+        footer = QFrame()
+        footer.setObjectName("panel")
+        footer_layout = QVBoxLayout(footer)
+        footer_layout.setContentsMargins(14, 12, 14, 12)
+        footer_layout.setSpacing(9)
+
+        mode_row = QHBoxLayout()
         self.mode_label = QLabel()
+        self.mode_label.setObjectName("modePill")
         self.mode_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        if self.dry_run_enabled:
-            self.mode_label.setText("DRY RUN MODE: Read-Only Preview (No files will be modified)")
-            self.mode_label.setStyleSheet("background-color: #333300; color: #ffff99; font-weight: bold; padding: 5px;")
-        else:
-            self.mode_label.setText("REGULAR MODE: Live Operations (Files will be organized/renamed)")
-            self.mode_label.setStyleSheet("background-color: #003300; color: #99ff99; font-weight: bold; padding: 5px;")
-        main_layout.addWidget(self.mode_label)
+        mode_row.addWidget(self.mode_label, 0)
+        mode_row.addStretch(1)
+        self.status_label = QLabel("Ready")
+        self.status_label.setObjectName("mutedLabel")
+        self.status_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        mode_row.addWidget(self.status_label, 1)
+        footer_layout.addLayout(mode_row)
+
+        self.selected_paths_label = QLabel("No source selected")
+        self.selected_paths_label.setObjectName("scopeLabel")
+        self.selected_paths_label.setWordWrap(True)
+        footer_layout.addWidget(self.selected_paths_label)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 1)
+        self.progress_bar.setValue(0)
+        footer_layout.addWidget(self.progress_bar)
+        main_layout.addWidget(footer)
+
+        self._refresh_mode_ui()
 
         # Initialize game organizer
         self.game_organizer = GameOrganizer()  # Instantiate GameOrganizer
 
+    def _open_log_folder(self) -> None:
+        """Open RyuSync's log folder in Finder."""
+        try:
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
+            subprocess.Popen(["open", str(LOG_DIR)])
+        except OSError as exc:
+            logging.error("Could not open log folder: %s", exc)
+            QMessageBox.warning(self, "Open Logs Failed", user_facing_error(exc))
+
+    def _on_dry_mode_toggled(self, checked: bool) -> None:
+        """Persist and display the current processing mode."""
+        self.dry_run_enabled = checked
+        self.settings["dry_run_enabled"] = checked
+        save_settings(self.settings)
+        self._refresh_mode_ui()
+        self._set_status("Dry Mode ready" if checked else "Regular Mode ready")
+
+    def _refresh_mode_ui(self) -> None:
+        if self.dry_run_enabled:
+            self.setWindowTitle("RyuSync - Dry Mode")
+            self.mode_label.setText("DRY MODE")
+            self.mode_label.setStyleSheet(
+                "QLabel#modePill { background: #fff5cc; color: #7a5200; }"
+            )
+        else:
+            self.setWindowTitle("RyuSync - Regular Mode")
+            self.mode_label.setText("REGULAR MODE")
+            self.mode_label.setStyleSheet(
+                "QLabel#modePill { background: #e9f7ef; color: #0f6b3d; }"
+            )
+
+    def _set_status(self, message: str) -> None:
+        if hasattr(self, "status_label"):
+            self.status_label.setText(message)
+
+    def _set_selected_paths(self, paths: list[Path]) -> None:
+        if not hasattr(self, "selected_paths_label"):
+            return
+        if not paths:
+            self.selected_paths_label.setText("No source selected")
+            return
+        labels = [str(path) for path in paths[:3]]
+        if len(paths) > 3:
+            labels.append(f"...and {len(paths) - 3} more")
+        self.selected_paths_label.setText("Selected source: " + "\n".join(labels))
+
     def log_failure(self, error_message: str) -> None:
-        """Log failures to desktop file instead of showing in summary"""
+        """Log failures to the app log folder instead of exposing tracebacks."""
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         try:
             self.failure_log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1947,12 +2329,17 @@ class DragDropWindow(QMainWindow):
     def _on_worker_summary(self, summary_text):
         self.summary_widget.setText(summary_text)
         self.stacked_widget.setCurrentWidget(self.summary_widget)
+        self._set_status("Finished")
 
     def _on_worker_error(self, error_msg):
         self.log_failure(error_msg)
-        if hasattr(self, "status_label"):
-            self.status_label.setText("Error. Open logs for details.")
-        # Optionally show a QMessageBox or status message
+        safe_message = str(error_msg).splitlines()[0][:180]
+        self._set_status(f"Error: {safe_message}")
+        self.summary_widget.setText(
+            "RyuSync stopped before completing the operation.\n\n"
+            f"{safe_message}\n\nOpen Logs for details."
+        )
+        self.stacked_widget.setCurrentWidget(self.summary_widget)
 
     def _on_worker_finished_folder(self, folder_path):
         # Called after each folder is processed
@@ -1990,44 +2377,56 @@ class DragDropWindow(QMainWindow):
 
     def setup_window_image(self) -> None:
         """Page 0 of the stacked widget — splash image shown before first drop."""
-        self.image_widget = QLabel()
-        self.image_widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.image_widget.setStyleSheet("background-color: black;")
-        image_path = get_resource_path("nxx.png", base_file=__file__)
+        self.image_widget = QFrame()
+        self.image_widget.setObjectName("dropPanel")
+        self.image_widget.setAcceptDrops(False)
+        drop_layout = QVBoxLayout(self.image_widget)
+        drop_layout.setContentsMargins(34, 34, 34, 34)
+        drop_layout.setSpacing(12)
+        drop_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        icon_label = QLabel()
+        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        image_path = get_resource_path("RyuSync-icon-1024.png", base_file=__file__)
         if image_path.exists():
             pixmap = QPixmap(str(image_path))
             if not pixmap.isNull():
-                self.image_widget.setPixmap(pixmap)
-            else:
-                self.image_widget.setText("Drop a folder to process.")
-        else:
-            self.image_widget.setText("Drop a folder to process.")
+                icon_label.setPixmap(
+                    pixmap.scaled(
+                        128,
+                        128,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                )
+        drop_layout.addWidget(icon_label)
+
+        title = QLabel("Drop files to organize")
+        title.setObjectName("dropTitle")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        drop_layout.addWidget(title)
+
+        hint = QLabel("NSP, XCI, ZIP, RAR, 7Z, or a specific game folder")
+        hint.setObjectName("dropHint")
+        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        hint.setWordWrap(True)
+        drop_layout.addWidget(hint)
+
+        safety = QLabel("RyuSync only processes the selected source scope.")
+        safety.setObjectName("mutedLabel")
+        safety.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        safety.setWordWrap(True)
+        drop_layout.addWidget(safety)
+
         self.stacked_widget.addWidget(self.image_widget)
 
     def setup_summary_display(self) -> None:
         """Page 1 of the stacked widget — results panel shown after processing."""
-        self.summary_widget = QLabel()
-        self.summary_widget.setAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
-        )
-        self.summary_widget.setWordWrap(False)
-        self.summary_widget.setStyleSheet(
-            """
-            QLabel {
-                background-color: black;
-                color: white;
-                font-family: 'Courier New', monospace;
-                font-size: 18px;
-                padding-top: 20px;
-                padding-left: 30px;
-                padding-right: 30px;
-                padding-bottom: 16px;
-                margin: 12px;
-                border: 2px solid #333;
-                border-radius: 10px;
-                font-weight: bold;
-            }
-        """
+        self.summary_widget = QTextEdit()
+        self.summary_widget.setReadOnly(True)
+        self.summary_widget.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        self.summary_widget.setText(
+            "Drop Switch files or a specific folder to see the processing summary."
         )
         self.stacked_widget.addWidget(self.summary_widget)
 
@@ -2116,10 +2515,57 @@ class DragDropWindow(QMainWindow):
         lines.append("Dry Run is ON. No files were moved, renamed, merged, or deleted.")
         return "\n".join(lines)
 
+    def _show_drop_warning(self, title: str, message: str) -> None:
+        self.log_failure(f"{title}: {message}")
+        self._set_status(message.splitlines()[0][:160])
+        QMessageBox.warning(self, title, message)
+
+    def _drop_path_can_process(self, path: Path) -> tuple[bool, str]:
+        kind = self._classify_path(path)
+        if kind == "missing":
+            return False, "The item is missing or cannot be read."
+        if kind == "file":
+            if is_supported_game_or_archive_file(path):
+                return True, ""
+            return False, "Only .nsp, .xci, .zip, .rar, and .7z files are supported."
+        if is_protected_directory(path):
+            return False, "Choose a specific game folder instead of a high-level folder."
+        return True, ""
+
+    def _collect_dropped_paths(self, mime) -> tuple[list[Path], list[str]]:
+        """Collect local filesystem URLs from a drop and reject everything else."""
+        if not mime.hasUrls():
+            return [], ["Drop files or folders from Finder."]
+
+        dropped_paths: list[Path] = []
+        errors: list[str] = []
+        for url in mime.urls():
+            if not url.isLocalFile():
+                errors.append("RyuSync only accepts local Finder files and folders.")
+                continue
+            local = url.toLocalFile()
+            if not local:
+                errors.append("Dropped item was not a local filesystem path.")
+                continue
+            try:
+                resolved = resolve_safe_drop_path(Path(local))
+            except OSError as exc:
+                errors.append(user_facing_error(exc))
+                continue
+            can_process, reason = self._drop_path_can_process(resolved)
+            if not can_process:
+                errors.append(f"{Path(local).name}: {reason}")
+                continue
+            dropped_paths.append(resolved)
+        return dropped_paths, errors
+
     def dragEnterEvent(self, event) -> None:
         """Handle drag enter event"""
-        if event.mimeData().hasUrls():
+        dropped_paths, _errors = self._collect_dropped_paths(event.mimeData())
+        if dropped_paths:
             event.acceptProposedAction()
+        else:
+            event.ignore()
 
     def dragLeaveEvent(self, event) -> None:
         """Handle drag leave event"""
@@ -2136,22 +2582,19 @@ class DragDropWindow(QMainWindow):
             a parent directory (e.g. the Desktop or the Home folder).
         """
         mime = event.mimeData()
-        if not mime.hasUrls():
+        dropped_paths, drop_errors = self._collect_dropped_paths(mime)
+        if drop_errors and not dropped_paths:
+            self._show_drop_warning(
+                "Unsupported Drop",
+                "\n".join(dict.fromkeys(drop_errors[:5])),
+            )
             return
-
-        # Normalize and validate every dropped path up front.
-        dropped_paths: list[Path] = []
-        for url in mime.urls():
-            local = url.toLocalFile()
-            if not local:
-                continue
-            try:
-                dropped_paths.append(Path(local))
-            except (OSError, ValueError):
-                continue
+        if drop_errors:
+            logging.info("Skipped unsupported dropped item(s): %s", drop_errors)
         if not dropped_paths:
             return
 
+        self._set_selected_paths(dropped_paths)
         mode = "Dry" if self.dry_run_enabled else "Regular"
 
         # --- Dry Mode: strictly read-only preview of the EXACT dropped paths ---
@@ -2186,8 +2629,7 @@ class DragDropWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 "Error",
-                "Failed to prepare the dropped item for processing. "
-                "Check the failure log on your desktop for details.",
+                user_facing_error(e),
             )
             return
 
@@ -2209,8 +2651,7 @@ class DragDropWindow(QMainWindow):
                 QMessageBox.warning(
                     self,
                     "Error",
-                    "Failed to queue files for processing. "
-                    "Check the failure log on your desktop for details.",
+                    "Failed to queue files for processing. Open Logs for details.",
                 )
 
         if started:
@@ -2254,7 +2695,12 @@ class DragDropWindow(QMainWindow):
         while temp_dir.exists():
             counter += 1
             temp_dir = base / f"ryusync_temp_{stamp}_{counter}"
-        temp_dir.mkdir()
+        try:
+            temp_dir.mkdir()
+        except OSError as exc:
+            raise FileOperationError(
+                f"Could not create a staging folder inside {base}"
+            ) from exc
         return temp_dir
 
     def _prepare_drop(self, dropped_paths: list[Path]) -> list:
@@ -2263,10 +2709,16 @@ class DragDropWindow(QMainWindow):
         Only the EXACT dropped paths are ever touched — never a parent directory.
         Returns an empty list when there is nothing safe to process.
         """
-        if len(dropped_paths) == 1:
-            item = self._prepare_single_drop(dropped_paths[0])
+        safe_paths = []
+        for path in dropped_paths:
+            try:
+                safe_paths.append(resolve_safe_drop_path(path))
+            except OSError as exc:
+                self._show_drop_warning("Unsupported Drop", user_facing_error(exc))
+        if len(safe_paths) == 1:
+            item = self._prepare_single_drop(safe_paths[0])
             return [item] if item else []
-        return self._prepare_multi_drop(dropped_paths)
+        return self._prepare_multi_drop(safe_paths)
 
     def _prepare_single_drop(self, path: Path):
         """Plan a single dropped item.
@@ -2289,12 +2741,11 @@ class DragDropWindow(QMainWindow):
             # its parent directory.
             if is_archive_file(path):
                 return self._wrap_single_archive(path)
-            if path.suffix.lower() not in (".nsp", ".xci"):
+            if path.suffix.lower() not in GAME_FILE_SUFFIXES:
                 self._log_drop_decision(
                     "Regular", path, "file", "rejected — unsupported file type"
                 )
-                QMessageBox.warning(
-                    self,
+                self._show_drop_warning(
                     "Unsupported File",
                     "RyuSync handles .nsp/.xci game files and "
                     ".rar/.zip/.7z archives.\n\n"
@@ -2372,8 +2823,9 @@ class DragDropWindow(QMainWindow):
         """
         base = file_path.parent
         temp_dir = self._make_isolated_temp_dir(base)
-        destination = temp_dir / file_path.name
-        shutil.move(str(file_path), str(destination))
+        safe_name = sanitize_path_component(file_path.name, default="Dropped File")
+        destination = unique_destination_path(temp_dir / safe_name, source=file_path)
+        safe_move(file_path, destination, [base])
         return (temp_dir, base)
 
     def _prepare_multi_drop(self, dropped_paths: list[Path]) -> list:
@@ -2387,8 +2839,20 @@ class DragDropWindow(QMainWindow):
         """
         items: list[Path] = []
         for path in dropped_paths:
+            try:
+                path = resolve_safe_drop_path(path)
+            except OSError as exc:
+                self._log_drop_decision(
+                    "Regular", path, "missing", f"SKIPPED — {user_facing_error(exc)}"
+                )
+                continue
             kind = self._classify_path(path)
             if kind == "missing":
+                continue
+            if kind == "file" and not is_supported_game_or_archive_file(path):
+                self._log_drop_decision(
+                    "Regular", path, "file", "SKIPPED — unsupported file type"
+                )
                 continue
             if kind == "folder" and is_protected_directory(path):
                 self._log_drop_decision(
@@ -2438,10 +2902,18 @@ class DragDropWindow(QMainWindow):
                 f"isolate into {temp_dir.name} and organize",
             )
             try:
-                shutil.move(str(path), str(temp_dir / path.name))
+                safe_name = sanitize_path_component(
+                    path.name,
+                    default="Dropped Item",
+                    preserve_extension=path.is_file(),
+                )
+                staged_path = unique_destination_path(temp_dir / safe_name, source=path)
+                safe_move(path, staged_path, [base])
                 staged_any = True
             except Exception as e:
-                self.log_failure(f"Error isolating dropped item {path}: {e}")
+                self.log_failure(
+                    f"Error isolating dropped item {path}: {user_facing_error(e)}"
+                )
 
         if not staged_any:
             try:
@@ -2454,6 +2926,19 @@ class DragDropWindow(QMainWindow):
     def process_dropped_directory(self, directory: Path) -> str:
         """Process the dropped directory using ID-based file organization."""
         try:
+            directory = resolve_safe_drop_path(directory)
+            if not directory.is_dir():
+                message = "RyuSync can only process a folder here."
+                self._show_drop_warning("Invalid Source", message)
+                return message
+            if is_protected_directory(directory):
+                message = (
+                    "RyuSync blocked this high-level folder. "
+                    "Choose a specific game folder instead."
+                )
+                self._show_drop_warning("Operation Blocked", message)
+                return message
+            self._set_selected_paths([directory])
             logging.info(f"Starting to process directory: {directory}")
             if self.dry_run_enabled:
                 logging.info(f"Dry run enabled. Previewing directory: {directory}")
@@ -2810,15 +3295,17 @@ class DragDropWindow(QMainWindow):
         except Exception as e:
             logging.error(f"Error processing directory: {e}", exc_info=True)
             # Log failure to file
-            self.log_failure(f"FATAL ERROR processing {directory}: {str(e)}")
+            readable_error = user_facing_error(e)
+            self.log_failure(f"FATAL ERROR processing {directory}: {readable_error}")
             # Show error message to user
             QMessageBox.critical(
                 self,
                 "Processing Error",
-                f"A critical error occurred processing {directory.name}.\nCheck the failure log on your Desktop.\n\nError: {e}",
+                f"A critical error occurred processing {directory.name}.\n\n"
+                f"{readable_error}\n\nOpen Logs for details.",
             )
             # Return error string for internal handling if needed
-            return f"Error processing directory: {e}"
+            return f"Error processing directory: {readable_error}"
 
     def apply_renaming_rules(self, filename: str) -> str:
         """Apply comprehensive renaming rules with improved UPD detection"""
@@ -2965,7 +3452,9 @@ class DragDropWindow(QMainWindow):
             final_name = re.sub(r"\(\s*\)", "", final_name)
             final_name = re.sub(r"\s+", " ", final_name)
 
-            return final_name
+            return sanitize_path_component(
+                final_name, default="Unknown Game", preserve_extension=True
+            )
         except Exception as e:
             logging.error(
                 f"Error applying renaming rules to '{filename}': {e}", exc_info=True
@@ -3989,7 +4478,11 @@ class GameOrganizer:
 
         clean_name = sanitize_possessive(clean_name)
         clean_name = clean_name.title()
-        return clean_name.rstrip(".")
+        return sanitize_path_component(
+            clean_name.rstrip("."),
+            default="Unknown Game",
+            preserve_extension=False,
+        )
 
     def normalize_name(self, name: str) -> str:
         normalized = sanitize_possessive(name).lower()
@@ -4867,7 +5360,11 @@ def rename_single_file(file_path: Path, authoritative_base_name: str):
     new_name_parts.append(file_tag)  # Re-insert the extracted type tag
 
     new_filename_base = " ".join(p for p in new_name_parts if p)
-    new_filename = re.sub(r"\s{2,}", " ", new_filename_base).strip() + file_ext
+    new_filename = sanitize_path_component(
+        re.sub(r"\s{2,}", " ", new_filename_base).strip() + file_ext,
+        default="Unknown Game",
+        preserve_extension=True,
+    )
 
     # 4. Rename the file if it has changed
     if new_filename != original_filename:
@@ -5118,26 +5615,6 @@ def main() -> None:
             window.processed_directories.add(directory_path)
 
             logging.info(f"Processing directory from command line: {directory_path}")
-
-            # First, remove version numbers from folders with UPD files
-            for folder in Path(directory_path).iterdir():
-                if folder.is_dir():
-                    # Check if folder contains UPD files
-                    has_upd = any(
-                        "[UPD]" in f.name for f in folder.glob("*") if f.is_file()
-                    )
-                    if has_upd:
-                        # Use the dedicated function to remove version patterns
-                        remove_versions_from_path(folder)
-                        logging.info(f"Processed version tags in folder: {folder.name}")
-
-            # Process possessive forms in folder names
-            process_folder(Path(directory_path))
-            logging.info(
-                f"Processed possessive forms in folder names in {directory_path}"
-            )
-
-            # Process the directory with the DragDropWindow
             window.process_dropped_directory(Path(directory_path))
 
         else:
