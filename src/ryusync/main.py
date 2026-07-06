@@ -17,7 +17,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Any
 
-from ryusync.app_resources import get_resource_path
+from ryusync.app_resources import get_resource_dir, get_resource_path
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
@@ -3957,7 +3957,7 @@ class GameOrganizer:
     """Organize game files and folders with improved handling of abbreviations and fuzzy matching."""
 
     def __init__(self):
-        self.resources_dir = os.path.join(os.path.dirname(__file__), "resources")
+        self.resources_dir = str(get_resource_dir(base_file=__file__))
         self.similarity_threshold = 70  # Lowered threshold for better matching
         self.canonical_folder_map = {}
 
