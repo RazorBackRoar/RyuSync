@@ -1,7 +1,7 @@
 # RyuSync AGENTS
 
 **Package:** `ryusync`
-**Version:** 0.1.0
+**Version:** 1.0.0
 
 Use this file with `../AGENTS.md`. It only records RyuSync-specific context.
 
