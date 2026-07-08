@@ -13,7 +13,11 @@ def get_resource_root(*, base_file: str | Path | None = None) -> Path:
     if base_file is None:
         return Path(__file__).resolve().parent
 
-    return Path(base_file).resolve().parent
+    start = Path(base_file).resolve().parent
+    for candidate in (start, *start.parents):
+        if (candidate / "resources").is_dir():
+            return candidate
+    return start
 
 
 def get_resource_dir(*, base_file: str | Path | None = None) -> Path:

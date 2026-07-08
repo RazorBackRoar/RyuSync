@@ -1,0 +1,6 @@
+[x] Task 1: Review RyuSync request, docs, packaging notes, source map, and baseline validation (completed 2026-07-06)
+[x] Task 2: Polish macOS UI and status/progress surface (completed 2026-07-06)
+[x] Task 3: Harden drop validation, filename sanitization, duplicate destinations, and user-readable errors (completed 2026-07-06)
+[x] Task 4: Refresh blue/red app icon assets (completed 2026-07-06)
+[x] Task 5: Add focused tests and rerun validation (completed 2026-07-06)
+[x] Task 6: Simplify icon to red/blue flowing linework without arrow/logo marks (completed 2026-07-06)
