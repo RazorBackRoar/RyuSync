@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt, QThread, Signal
-from PySide6.QtGui import QColor, QIcon, QPixmap
+from PySide6.QtGui import QColor, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -2245,28 +2245,6 @@ class DragDropWindow(QMainWindow):
         header_layout.setContentsMargins(16, 14, 16, 14)
         header_layout.setSpacing(14)
 
-        self.header_icon = QLabel()
-        self.header_icon.setFixedSize(54, 54)
-        icon_path = get_resource_path("RyuSync-icon-1024.png", base_file=__file__)
-        if icon_path.exists():
-            icon_pixmap = QPixmap(str(icon_path))
-            if not icon_pixmap.isNull():
-                self.header_icon.setPixmap(
-                    icon_pixmap.scaled(
-                        54,
-                        54,
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation,
-                    )
-                )
-                # Neon blue glow around the header icon
-                header_icon_glow = QGraphicsDropShadowEffect()
-                header_icon_glow.setBlurRadius(20)
-                header_icon_glow.setColor(QColor(0, 208, 255, 150))
-                header_icon_glow.setOffset(0, 0)
-                self.header_icon.setGraphicsEffect(header_icon_glow)
-        header_layout.addWidget(self.header_icon)
-
         title_column = QVBoxLayout()
         title_column.setSpacing(2)
         title_label = QLabel("RyuSync")
@@ -2488,28 +2466,6 @@ class DragDropWindow(QMainWindow):
         drop_layout.setContentsMargins(34, 34, 34, 34)
         drop_layout.setSpacing(12)
         drop_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        icon_label = QLabel()
-        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        image_path = get_resource_path("RyuSync-icon-1024.png", base_file=__file__)
-        if image_path.exists():
-            pixmap = QPixmap(str(image_path))
-            if not pixmap.isNull():
-                icon_label.setPixmap(
-                    pixmap.scaled(
-                        128,
-                        128,
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation,
-                    )
-                )
-                # Neon blue glow around the splash icon
-                icon_glow = QGraphicsDropShadowEffect()
-                icon_glow.setBlurRadius(25)
-                icon_glow.setColor(QColor(0, 208, 255, 180))
-                icon_glow.setOffset(0, 0)
-                icon_label.setGraphicsEffect(icon_glow)
-        drop_layout.addWidget(icon_label)
 
         title = QLabel("Drop files to organize")
         title.setObjectName("dropTitle")
@@ -5757,7 +5713,7 @@ def main() -> None:
     # Fusion style ensures dark QSS renders consistently on macOS (native Aqua
     # ignores parts of dark styling like hover states and some borders).
     app.setStyle("Fusion")
-    icon_path = get_resource_path("RyuSync-icon-1024.png", base_file=__file__)
+    icon_path = get_resource_path("RyuSync.icns", base_file=__file__)
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
     window = DragDropWindow()
