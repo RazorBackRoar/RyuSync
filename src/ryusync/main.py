@@ -2129,15 +2129,24 @@ class DragDropWindow(QMainWindow):
                 font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
                              "Helvetica Neue", Arial, sans-serif;
             }
-            QFrame#panel {
+            QFrame#headerPanel {
                 background: #14141c;
-                border: 1px solid #2a2a3a;
+                border: 1px solid rgba(255, 45, 85, 0.6);
+                border-radius: 18px;
+            }
+            QFrame#footerPanel {
+                background: #14141c;
+                border: 1px solid rgba(0, 208, 255, 0.6);
                 border-radius: 18px;
             }
             QFrame#dropPanel {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                     stop:0 #0f0f15, stop:0.52 #12121a, stop:1 #0f0f15);
-                border: 2px dashed rgba(0, 208, 255, 0.4);
+                border: 2px dashed rgba(0, 208, 255, 0.45);
+                border-top-color: rgba(255, 45, 85, 0.55);
+                border-left-color: rgba(255, 45, 85, 0.55);
+                border-bottom-color: rgba(0, 208, 255, 0.55);
+                border-right-color: rgba(0, 208, 255, 0.55);
                 border-radius: 22px;
             }
             QLabel#titleLabel {
@@ -2176,6 +2185,7 @@ class DragDropWindow(QMainWindow):
             QLabel#scopeLabel {
                 background: #1a1a24;
                 border: 1px solid #2a2a3a;
+                border-left: 3px solid #ff2d55;
                 border-radius: 10px;
                 color: #a0a8b8;
                 font-size: 12px;
@@ -2183,7 +2193,7 @@ class DragDropWindow(QMainWindow):
             }
             QPushButton {
                 background: #1a1a24;
-                border: 1px solid #2a2a3a;
+                border: 1px solid rgba(255, 45, 85, 0.45);
                 border-radius: 10px;
                 color: #e0e6ed;
                 font-weight: 600;
@@ -2202,7 +2212,7 @@ class DragDropWindow(QMainWindow):
             QCheckBox::indicator {
                 width: 18px;
                 height: 18px;
-                border: 2px solid #3a3a4a;
+                border: 2px solid rgba(255, 45, 85, 0.6);
                 border-radius: 4px;
                 background: #1a1a24;
             }
@@ -2215,7 +2225,7 @@ class DragDropWindow(QMainWindow):
             }
             QProgressBar {
                 background: #1a1a24;
-                border: 1px solid #2a2a3a;
+                border: 1px solid rgba(255, 45, 85, 0.4);
                 border-radius: 7px;
                 height: 10px;
                 text-align: center;
@@ -2226,9 +2236,11 @@ class DragDropWindow(QMainWindow):
                     stop:0 #00d0ff, stop:1 #ff2d55);
                 border-radius: 7px;
             }
-            QTextEdit {
+            QTextEdit#summaryPanel {
                 background: #0f0f15;
-                border: 1px solid #2a2a3a;
+                border: 1px solid rgba(0, 208, 255, 0.35);
+                border-top-color: rgba(255, 45, 85, 0.45);
+                border-left-color: rgba(255, 45, 85, 0.45);
                 border-radius: 14px;
                 color: #e0e6ed;
                 font-family: "SF Mono", Menlo, Monaco, monospace;
@@ -2240,7 +2252,7 @@ class DragDropWindow(QMainWindow):
         )
 
         header = QFrame()
-        header.setObjectName("panel")
+        header.setObjectName("headerPanel")
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(16, 14, 16, 14)
         header_layout.setSpacing(14)
@@ -2249,6 +2261,11 @@ class DragDropWindow(QMainWindow):
         title_column.setSpacing(2)
         title_label = QLabel("RyuSync")
         title_label.setObjectName("titleLabel")
+        title_glow = QGraphicsDropShadowEffect()
+        title_glow.setBlurRadius(16)
+        title_glow.setColor(QColor(255, 45, 85, 110))
+        title_glow.setOffset(0, 0)
+        title_label.setGraphicsEffect(title_glow)
         subtitle_label = QLabel("Switch file organizer for macOS")
         subtitle_label.setObjectName("subtitleLabel")
         title_column.addWidget(title_label)
@@ -2275,7 +2292,7 @@ class DragDropWindow(QMainWindow):
         self.setup_summary_display()
 
         footer = QFrame()
-        footer.setObjectName("panel")
+        footer.setObjectName("footerPanel")
         footer_layout = QVBoxLayout(footer)
         footer_layout.setContentsMargins(14, 12, 14, 12)
         footer_layout.setSpacing(9)
@@ -2495,6 +2512,7 @@ class DragDropWindow(QMainWindow):
     def setup_summary_display(self) -> None:
         """Page 1 of the stacked widget — results panel shown after processing."""
         self.summary_widget = QTextEdit()
+        self.summary_widget.setObjectName("summaryPanel")
         self.summary_widget.setReadOnly(True)
         self.summary_widget.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
         self.summary_widget.setText(
