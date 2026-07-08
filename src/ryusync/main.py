@@ -19,11 +19,12 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt, QThread, Signal
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtGui import QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QFrame,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -2123,47 +2124,47 @@ class DragDropWindow(QMainWindow):
         central_widget.setStyleSheet(
             """
             QWidget#appRoot {
-                background: #f5f6f8;
-                color: #1f2328;
+                background: #0a0a0f;
+                color: #e0e6ed;
                 font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
                              "Helvetica Neue", Arial, sans-serif;
             }
             QFrame#panel {
-                background: rgba(255, 255, 255, 0.92);
-                border: 1px solid rgba(30, 44, 64, 0.12);
+                background: #14141c;
+                border: 1px solid #2a2a3a;
                 border-radius: 18px;
             }
             QFrame#dropPanel {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #f9fbff, stop:0.52 #ffffff, stop:1 #fff6f2);
-                border: 2px dashed rgba(56, 106, 190, 0.34);
+                    stop:0 #0f0f15, stop:0.52 #12121a, stop:1 #0f0f15);
+                border: 2px dashed rgba(0, 208, 255, 0.4);
                 border-radius: 22px;
             }
             QLabel#titleLabel {
-                color: #101418;
+                color: #e0e6ed;
                 font-size: 28px;
                 font-weight: 700;
             }
             QLabel#subtitleLabel {
-                color: #687080;
+                color: #8b9bb4;
                 font-size: 13px;
             }
             QLabel#sectionLabel {
-                color: #2a2f38;
+                color: #c0c8d8;
                 font-size: 15px;
                 font-weight: 650;
             }
             QLabel#mutedLabel {
-                color: #697386;
+                color: #6b7a8f;
                 font-size: 12px;
             }
             QLabel#dropTitle {
-                color: #101418;
+                color: #e0e6ed;
                 font-size: 22px;
                 font-weight: 700;
             }
             QLabel#dropHint {
-                color: #596271;
+                color: #8b9bb4;
                 font-size: 13px;
             }
             QLabel#modePill {
@@ -2173,34 +2174,48 @@ class DragDropWindow(QMainWindow):
                 padding: 5px 10px;
             }
             QLabel#scopeLabel {
-                background: #f7f8fb;
-                border: 1px solid #e4e8ef;
+                background: #1a1a24;
+                border: 1px solid #2a2a3a;
                 border-radius: 10px;
-                color: #3d4654;
+                color: #a0a8b8;
                 font-size: 12px;
                 padding: 8px 10px;
             }
             QPushButton {
-                background: #ffffff;
-                border: 1px solid #d9dee7;
+                background: #1a1a24;
+                border: 1px solid #2a2a3a;
                 border-radius: 10px;
-                color: #1f2937;
+                color: #e0e6ed;
                 font-weight: 600;
                 padding: 7px 12px;
             }
             QPushButton:hover {
-                background: #f1f5fb;
-                border-color: #c6d0df;
+                background: #2a2a3a;
+                border-color: #00d0ff;
             }
             QCheckBox {
-                color: #303744;
+                color: #c0c8d8;
                 font-size: 13px;
                 font-weight: 600;
                 spacing: 8px;
             }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                border: 2px solid #3a3a4a;
+                border-radius: 4px;
+                background: #1a1a24;
+            }
+            QCheckBox::indicator:checked {
+                background: #00d0ff;
+                border-color: #00d0ff;
+            }
+            QCheckBox::indicator:hover {
+                border-color: #00d0ff;
+            }
             QProgressBar {
-                background: #edf1f6;
-                border: 1px solid #dce3ed;
+                background: #1a1a24;
+                border: 1px solid #2a2a3a;
                 border-radius: 7px;
                 height: 10px;
                 text-align: center;
@@ -2208,18 +2223,18 @@ class DragDropWindow(QMainWindow):
             }
             QProgressBar::chunk {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #1578d4, stop:1 #ff4d45);
+                    stop:0 #00d0ff, stop:1 #ff2d55);
                 border-radius: 7px;
             }
             QTextEdit {
-                background: #10151d;
-                border: 1px solid #263141;
+                background: #0f0f15;
+                border: 1px solid #2a2a3a;
                 border-radius: 14px;
-                color: #f5f7fb;
+                color: #e0e6ed;
                 font-family: "SF Mono", Menlo, Monaco, monospace;
                 font-size: 13px;
                 padding: 16px;
-                selection-background-color: #2f6feb;
+                selection-background-color: #00d0ff;
             }
             """
         )
@@ -2244,6 +2259,12 @@ class DragDropWindow(QMainWindow):
                         Qt.TransformationMode.SmoothTransformation,
                     )
                 )
+                # Neon blue glow around the header icon
+                header_icon_glow = QGraphicsDropShadowEffect()
+                header_icon_glow.setBlurRadius(20)
+                header_icon_glow.setColor(QColor(0, 208, 255, 150))
+                header_icon_glow.setOffset(0, 0)
+                self.header_icon.setGraphicsEffect(header_icon_glow)
         header_layout.addWidget(self.header_icon)
 
         title_column = QVBoxLayout()
@@ -2333,13 +2354,13 @@ class DragDropWindow(QMainWindow):
             self.setWindowTitle("RyuSync - Dry Mode")
             self.mode_label.setText("DRY MODE")
             self.mode_label.setStyleSheet(
-                "QLabel#modePill { background: #fff5cc; color: #7a5200; }"
+                "QLabel#modePill { background: #2a1a1a; color: #ff2d55; border: 1px solid #ff2d55; }"
             )
         else:
             self.setWindowTitle("RyuSync - Regular Mode")
             self.mode_label.setText("REGULAR MODE")
             self.mode_label.setStyleSheet(
-                "QLabel#modePill { background: #e9f7ef; color: #0f6b3d; }"
+                "QLabel#modePill { background: #1a2a3a; color: #00d0ff; border: 1px solid #00d0ff; }"
             )
 
     def _set_status(self, message: str) -> None:
@@ -2482,11 +2503,23 @@ class DragDropWindow(QMainWindow):
                         Qt.TransformationMode.SmoothTransformation,
                     )
                 )
+                # Neon blue glow around the splash icon
+                icon_glow = QGraphicsDropShadowEffect()
+                icon_glow.setBlurRadius(25)
+                icon_glow.setColor(QColor(0, 208, 255, 180))
+                icon_glow.setOffset(0, 0)
+                icon_label.setGraphicsEffect(icon_glow)
         drop_layout.addWidget(icon_label)
 
         title = QLabel("Drop files to organize")
         title.setObjectName("dropTitle")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # Neon glow around the drop title
+        title_glow = QGraphicsDropShadowEffect()
+        title_glow.setBlurRadius(20)
+        title_glow.setColor(QColor(0, 208, 255, 120))
+        title_glow.setOffset(0, 0)
+        title.setGraphicsEffect(title_glow)
         drop_layout.addWidget(title)
 
         hint = QLabel("NSP, XCI, ZIP, RAR, 7Z, or a specific game folder")
@@ -5721,6 +5754,9 @@ def standardize_filenames_to_folder(root_directoryectory: Path) -> None:
 def main() -> None:
     """Main entry point for the application."""
     app = QApplication(sys.argv)
+    # Fusion style ensures dark QSS renders consistently on macOS (native Aqua
+    # ignores parts of dark styling like hover states and some borders).
+    app.setStyle("Fusion")
     icon_path = get_resource_path("RyuSync-icon-1024.png", base_file=__file__)
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
