@@ -8,9 +8,9 @@
 [![macOS](https://img.shields.io/badge/mac%20os-Apple%20Silicon-d32f2f?style=for-the-badge&logo=apple&logoColor=white)](https://support.apple.com/en-us/HT211814)
 
 <!-- Workspace Health Layer -->
-[![Status](https://img.shields.io/badge/status-active-2ea44f?style=for-the-badge)
-[![Tests](https://img.shields.io/badge/tests-present-2ea44f?style=for-the-badge)
-[![Lint](https://img.shields.io/badge/lint-ruff-2ea44f?style=for-the-badge)
+[![Status](https://img.shields.io/badge/status-active-2ea44f?style=for-the-badge)]()
+[![Tests](https://img.shields.io/badge/tests-present-2ea44f?style=for-the-badge)]()
+[![Lint](https://img.shields.io/badge/lint-ruff-2ea44f?style=for-the-badge)]()
 
 ```text
 ██████╗ ██╗   ██╗██╗   ██╗███████╗██╗   ██╗███╗   ██╗ ██████╗
@@ -21,7 +21,7 @@
 ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝   ╚═╝  ╚═══╝ ╚═════╝
 ```
 
-> **TL;DR:** Native macOS drag-and-drop organizer for Nintendo Switch `.nsp` / `.xci` files. Cleans titles, tags content as `[GME]`, `[UPD]`, or `[DLC]`, extracts archives in place, and supports a read-only Dry Mode preview before anything moves.
+> **TL;DR:** Native macOS drag-and-drop organizer for Nintendo Switch `.nsp` / `.xci` files. Cleans titles, tags content as `[GME]`, `[UPD]`, or `[DLC]`, extracts archives in place, and supports a read-only Dry Mode preview before anything moves. Dark native UI with red/blue RazorBackRoar accents.
 
 ---
 
@@ -33,6 +33,7 @@
 - **Archive support** — extracts `.rar`, `.zip`, and `.7z` in place via `unar`; originals are preserved
 - **Dry Mode** — previews the full organization plan without modifying files
 - **Persistent settings** — dry-run preference and fuzzy-match threshold stored under Application Support
+- **Native macOS UI** — dark PySide6 interface with red `#ff2d55` and blue `#00d0ff` brand accents
 - **Apple Silicon native** — arm64 build optimized for M-series Macs
 
 ---
