@@ -18,7 +18,6 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Any
 
-from ryusync.app_resources import get_resource_dir, get_resource_path
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
@@ -37,6 +36,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from ryusync.app_resources import get_resource_dir, get_resource_path
 
 APP_VERSION = ""
 APP_SUPPORT_DIR = Path.home() / "Library" / "Application Support" / "RyuSync"
@@ -939,7 +940,9 @@ def sanitize_filename(filename: str, folder_path: str | None = None) -> str:
         clean_base_name = smart_title_case(clean_base_name)  # Apply smart title casing
 
         # Re-add extension if it was a file, then force a safe single path component.
-        candidate = f"{clean_base_name}{original_ext}" if original_ext else clean_base_name
+        candidate = (
+            f"{clean_base_name}{original_ext}" if original_ext else clean_base_name
+        )
         return sanitize_path_component(
             candidate,
             default="Unknown Name",
@@ -1123,9 +1126,7 @@ def safe_move(src: Path, dst: Path, allowed_roots: list[Path]) -> None:
 def safe_unlink(path: Path, allowed_roots: list[Path], directory: Path) -> None:
     """Unlink file only if it is within allowed roots and is safe for deletion."""
     if not is_path_safe(path, allowed_roots):
-        raise FileOperationError(
-            f"Blocked deletion outside the selected scope: {path}"
-        )
+        raise FileOperationError(f"Blocked deletion outside the selected scope: {path}")
     if not is_path_safe_for_deletion(path, directory):
         raise FileOperationError(
             f"Blocked deletion outside the processed folder: {path}"
@@ -1175,7 +1176,9 @@ def safe_rmdir(path: Path, allowed_roots: list[Path], directory: Path) -> None:
     path.rmdir()
 
 
-def remove_empty_directories(path: Path, allowed_roots: list[Path], directory: Path) -> None:
+def remove_empty_directories(
+    path: Path, allowed_roots: list[Path], directory: Path
+) -> None:
     """Recursively remove empty directories under path, checking safety."""
     if not path.is_dir():
         return
@@ -1227,9 +1230,10 @@ def find_unar() -> str | None:
 def extract_archive(archive: Path, dest_dir: Path) -> int:
     """Extract *archive* into *dest_dir* using ``unar``.
 
-    The original archive is never moved or deleted. Returns the number of
-    .nsp/.xci files found in *dest_dir* afterwards. Raises RuntimeError if
-    ``unar`` is unavailable or extraction fails.
+    ``unar`` only reads the archive; the caller (the worker thread) deletes the
+    original after the extracted contents have been organized. Returns the
+    number of .nsp/.xci files found in *dest_dir* afterwards. Raises RuntimeError
+    if ``unar`` is unavailable or extraction fails.
     """
     unar = find_unar()
     if not unar:
@@ -1390,7 +1394,7 @@ class FolderProcessingWorker(QThread):
             try:
                 # Auto-extract any dropped archives into the processing folder
                 # BEFORE counting/organizing (kept off the UI thread). The
-                # original archive files are preserved.
+                # original archives are removed after organization succeeds.
                 if archives:
                     self._extraction_errors = []
                     self._extract_archives_into(archives, processing_path)
@@ -1429,6 +1433,14 @@ class FolderProcessingWorker(QThread):
                     # Emit the summary text to update the UI
                     if summary_text:
                         self.summary.emit(summary_text)
+
+                    # The contents were organized successfully: remove the original
+                    # archives that were extracted. Failed extractions (corrupt /
+                    # password-protected) are preserved so the user can retry them.
+                    if archives:
+                        self._delete_extracted_archives(
+                            archives, processing_path, original_parent
+                        )
                 except Exception as e:
                     logging.error(
                         f"Error in process_folder_logic: {str(e)}", exc_info=True
@@ -1452,7 +1464,8 @@ class FolderProcessingWorker(QThread):
     def _extract_archives_into(self, archives, dest_dir: Path) -> None:
         """Extract each archive into *dest_dir* (runs on the worker thread).
 
-        The original archive files are preserved (unar only reads them). An
+        ``unar`` only reads the archives; the originals are removed afterward by
+        :meth:`_delete_extracted_archives` once organization succeeds. An
         extraction failure is surfaced via the error signal but does not abort
         the rest of the batch.
         """
@@ -1475,6 +1488,54 @@ class FolderProcessingWorker(QThread):
                 )
                 self._extraction_errors.append(archive.name)
                 self.error.emit(str(e))
+
+    def _delete_extracted_archives(
+        self, archives, processing_path: Path, original_parent: Path | None
+    ) -> None:
+        """Remove archives that were successfully extracted and organized.
+
+        Runs on the worker thread after :meth:`process_folder_logic` succeeds.
+        Archives whose extraction failed (recorded in
+        ``self._extraction_errors``) are left untouched so the user can inspect
+        or retry them. Only archives that live inside the processing folder or
+        the original parent — i.e. paths the user actually dropped — are ever
+        removed, so this can never delete an unrelated file elsewhere.
+        """
+        failed = set(getattr(self, "_extraction_errors", []))
+        # Allowed scopes: the processing folder, and (for single-archive wraps)
+        # the original parent the archive was dropped beside.
+        scopes: list[Path] = [processing_path.resolve()]
+        if original_parent is not None:
+            scopes.append(original_parent.resolve())
+
+        def _in_scope(path: Path) -> bool:
+            try:
+                resolved = path.resolve()
+            except OSError:
+                return False
+            for scope in scopes:
+                if resolved == scope or scope in resolved.parents:
+                    return True
+            return False
+
+        for archive in archives:
+            try:
+                if archive.name in failed:
+                    continue
+                if not archive.exists() or not archive.is_file():
+                    continue
+                if archive.suffix.lower() not in ARCHIVE_SUFFIXES:
+                    continue
+                if not _in_scope(archive):
+                    logging.warning(
+                        "[RyuSync] skipping archive cleanup outside scope: %s",
+                        archive,
+                    )
+                    continue
+                archive.unlink()
+                logging.info("[RyuSync] removed extracted archive: %s", archive)
+            except OSError as e:
+                logging.warning("[RyuSync] could not remove archive %s: %s", archive, e)
 
     def process_folder_logic(
         self, directory: Path, original_parent: Path | None = None
@@ -1520,8 +1581,25 @@ class FolderProcessingWorker(QThread):
             if root_path == directory:
                 # Add files already at the root
                 for file in files:
-                    if file.lower().endswith((".nsp", ".xci")):
-                        all_files_at_root.append(directory / file)
+                    file_lower = file.lower()
+                    root_file = directory / file
+                    if file_lower.endswith((".nsp", ".xci")):
+                        all_files_at_root.append(root_file)
+                    elif should_clean_file(root_file):
+                        # Clean junk (.url/.URL, OS metadata) sitting at the root
+                        # of the processing folder too — e.g. a .URL file extracted
+                        # from a dropped .nsp.rar or sitting beside it.
+                        try:
+                            safe_unlink(root_file, allowed_roots, directory)
+                            logging.info(
+                                f"Deleted URL/metadata shortcut file: {root_file}"
+                            )
+                        except OSError as e:
+                            logging.warning(
+                                f"Could not remove URL/metadata shortcut file {root_file}: {e}"
+                            )
+                    else:
+                        logging.info(f"Skipped unrelated non-game file: {root_file}")
                 continue  # Skip processing root further in this loop
 
             for file in files:
@@ -1531,7 +1609,9 @@ class FolderProcessingWorker(QThread):
                     if should_clean_file(file_path):
                         try:
                             safe_unlink(file_path, allowed_roots, directory)
-                            logging.info(f"Deleted URL/metadata shortcut file: {file_path}")
+                            logging.info(
+                                f"Deleted URL/metadata shortcut file: {file_path}"
+                            )
                         except OSError as e:
                             logging.warning(
                                 f"Could not remove URL/metadata shortcut file {file_path}: {e}"
@@ -1826,7 +1906,11 @@ class FolderProcessingWorker(QThread):
         summary += "----------------------------\n"
 
         unknown_dir = directory / "_UNKNOWN_ID"
-        unknown_count = sum(1 for f in unknown_dir.glob("*") if f.is_file()) if unknown_dir.exists() else 0
+        unknown_count = (
+            sum(1 for f in unknown_dir.glob("*") if f.is_file())
+            if unknown_dir.exists()
+            else 0
+        )
 
         if processed_files_count > 0:
             summary += f"\nSuccessfully processed {processed_files_count} files."
@@ -2366,7 +2450,6 @@ class DragDropWindow(QMainWindow):
             logging.error(f"Error updating file counts: {e}")
             self.log_failure(f"Error updating file counts: {e}")
 
-
     def _report_processing_progress(
         self, directory: Path, processed: int, total: int
     ) -> None:
@@ -2429,7 +2512,6 @@ class DragDropWindow(QMainWindow):
             "Drop Switch files or a specific folder to see the processing summary."
         )
         self.stacked_widget.addWidget(self.summary_widget)
-
 
     def _generate_dry_run_preview(self, dropped_paths: list[Path]) -> str:
         preview_items = []
@@ -2503,7 +2585,7 @@ class DragDropWindow(QMainWindow):
         ]
         for archive in archive_files[:18]:
             lines.append(f"{archive.name}  (archive)")
-            lines.append("  -> extract in place, then organize the contents")
+            lines.append("  -> extract in place, organize, then remove the archive")
         for item in preview_items[:18]:
             lines.append(f"{Path(item['source']).name}")
             lines.append(f"  -> {item['planned_destination']}")
@@ -2529,7 +2611,10 @@ class DragDropWindow(QMainWindow):
                 return True, ""
             return False, "Only .nsp, .xci, .zip, .rar, and .7z files are supported."
         if is_protected_directory(path):
-            return False, "Choose a specific game folder instead of a high-level folder."
+            return (
+                False,
+                "Choose a specific game folder instead of a high-level folder.",
+            )
         return True, ""
 
     def _collect_dropped_paths(self, mime) -> tuple[list[Path], list[str]]:
@@ -2724,8 +2809,9 @@ class DragDropWindow(QMainWindow):
         """Plan a single dropped item.
 
         Game files are wrapped and organized in isolation. Archives
-        (.rar/.zip/.7z) are auto-extracted in the SAME folder, then organized.
-        Folders run in place, extracting any archives they contain first.
+        (.rar/.zip/.7z) are auto-extracted in the SAME folder, organized, and
+        then the original archive is removed. Folders run in place, extracting
+        any archives they contain first.
         """
         kind = self._classify_path(path)
 
@@ -2787,7 +2873,7 @@ class DragDropWindow(QMainWindow):
                 "Regular",
                 path,
                 "folder",
-                f"extract {len(archives)} archive(s) in place, then organize this folder",
+                f"extract {len(archives)} archive(s) in place, organize, then remove the archive(s)",
             )
             return (path, None, archives)
 
@@ -2802,7 +2888,7 @@ class DragDropWindow(QMainWindow):
         An isolated temp dir is created inside the archive's own folder; the
         worker extracts the archive into it, organizes the contents, and moves
         the resulting game folder back beside the archive. The original archive
-        is left untouched.
+        is removed once organization succeeds.
         """
         base = archive.parent
         temp_dir = self._make_isolated_temp_dir(base)
@@ -2810,7 +2896,7 @@ class DragDropWindow(QMainWindow):
             "Regular",
             archive,
             "archive",
-            f"extract in place ({base}), then organize the contents",
+            f"extract in place ({base}), organize, then remove the archive",
         )
         return (temp_dir, base, [archive])
 
@@ -2885,14 +2971,15 @@ class DragDropWindow(QMainWindow):
         staged_any = False
         for path in items:
             if is_archive_file(path):
-                # Keep the original archive; the worker extracts it into temp_dir.
+                # The worker extracts the archive into temp_dir and removes the
+                # original after organization succeeds.
                 archives.append(path)
                 staged_any = True
                 self._log_drop_decision(
                     "Regular",
                     path,
                     "archive",
-                    f"extract into {temp_dir.name} and organize",
+                    f"extract into {temp_dir.name}, organize, then remove the archive",
                 )
                 continue
             self._log_drop_decision(
@@ -2979,8 +3066,27 @@ class DragDropWindow(QMainWindow):
                 if root_path == directory:
                     # Add files already at the root
                     for file in files:
-                        if file.lower().endswith((".nsp", ".xci")):
-                            all_files_at_root.append(directory / file)
+                        file_lower = file.lower()
+                        root_file = directory / file
+                        if file_lower.endswith((".nsp", ".xci")):
+                            all_files_at_root.append(root_file)
+                        elif should_clean_file(root_file):
+                            # Clean junk (.url/.URL, OS metadata) sitting at the
+                            # root of the processing folder too — e.g. a .URL file
+                            # extracted from a dropped .nsp.rar or sitting beside it.
+                            try:
+                                safe_unlink(root_file, allowed_roots, directory)
+                                logging.info(
+                                    f"Deleted URL/metadata shortcut file: {root_file}"
+                                )
+                            except OSError as e:
+                                logging.warning(
+                                    f"Could not remove URL/metadata shortcut file {root_file}: {e}"
+                                )
+                        else:
+                            logging.info(
+                                f"Skipped unrelated non-game file: {root_file}"
+                            )
                     continue  # Skip processing root further in this loop
 
                 for file in files:
@@ -2990,13 +3096,17 @@ class DragDropWindow(QMainWindow):
                         if should_clean_file(file_path):
                             try:
                                 safe_unlink(file_path, allowed_roots, directory)
-                                logging.info(f"Deleted URL/metadata shortcut file: {file_path}")
+                                logging.info(
+                                    f"Deleted URL/metadata shortcut file: {file_path}"
+                                )
                             except OSError as e:
                                 logging.warning(
                                     f"Could not remove URL/metadata shortcut file {file_path}: {e}"
                                 )
                         else:
-                            logging.info(f"Skipped unrelated non-game file: {file_path}")
+                            logging.info(
+                                f"Skipped unrelated non-game file: {file_path}"
+                            )
                         continue
 
                     target_path = directory / file
@@ -3794,9 +3904,7 @@ class DragDropWindow(QMainWindow):
             logging.info(f"Removing unwanted files in {directory}...")
 
             # Expanded list of unwanted extensions and specific files
-            unwanted_extensions = (
-                ".url",
-            )
+            unwanted_extensions = (".url",)
             unwanted_filenames = (
                 "desktop.ini",
                 "thumbs.db",
@@ -5430,7 +5538,7 @@ def standardize_filenames_to_folder(root_directoryectory: Path) -> None:
     for name in folder_names:
         norm = re.sub(r"remix", "mix", name, flags=re.IGNORECASE)
         mix_remix_map.setdefault(norm.lower(), []).append(name)
-    
+
     allowed_roots = [root_directoryectory]
 
     for _norm, variants in mix_remix_map.items():
@@ -5460,7 +5568,9 @@ def standardize_filenames_to_folder(root_directoryectory: Path) -> None:
                                     logging.info(
                                         f"Skipping identical file during merge: {item.name}"
                                     )
-                                    safe_unlink(item, allowed_roots, root_directoryectory)  # Delete the duplicate source
+                                    safe_unlink(
+                                        item, allowed_roots, root_directoryectory
+                                    )  # Delete the duplicate source
                                     continue
                                 else:
                                     # Append a suffix if different file with same name
@@ -5486,7 +5596,9 @@ def standardize_filenames_to_folder(root_directoryectory: Path) -> None:
 
                         # Remove the source folder if now empty
                         if not any(src_path.iterdir()):
-                            remove_empty_directories(src_path, allowed_roots, root_directoryectory)
+                            remove_empty_directories(
+                                src_path, allowed_roots, root_directoryectory
+                            )
                             logging.info(
                                 f"Removed empty merged folder: {src_path.name}"
                             )
@@ -5536,7 +5648,9 @@ def standardize_filenames_to_folder(root_directoryectory: Path) -> None:
                                     logging.info(
                                         f"Skipping identical file during merge: {src_item.name}"
                                     )
-                                    safe_unlink(src_item, allowed_roots, root_directoryectory)  # Delete the duplicate source
+                                    safe_unlink(
+                                        src_item, allowed_roots, root_directoryectory
+                                    )  # Delete the duplicate source
                                     continue
                                 else:
                                     # Append a suffix if different file with same name
@@ -5555,21 +5669,29 @@ def standardize_filenames_to_folder(root_directoryectory: Path) -> None:
                                         f"Moved '{src_item.name}' to '{new_folder_path.name}/{base}_{counter}{ext}' (conflict resolved)"
                                     )
                             else:
-                                safe_move(src_item, new_folder_path / src_item.name, allowed_roots)
+                                safe_move(
+                                    src_item,
+                                    new_folder_path / src_item.name,
+                                    allowed_roots,
+                                )
                                 logging.info(
                                     f"Moved '{src_item.name}' to existing folder '{new_folder_path.name}'"
                                 )
 
                         # Remove the source folder if now empty
                         if not any(game_folder_path.iterdir()):
-                            remove_empty_directories(game_folder_path, allowed_roots, root_directoryectory)
+                            remove_empty_directories(
+                                game_folder_path, allowed_roots, root_directoryectory
+                            )
                             logging.info(
                                 f"Removed empty source folder: {game_folder_path.name}"
                             )
                         game_folder_path = new_folder_path  # Update reference to the new canonical folder
                     else:
                         # Rename the folder directly if no conflict
-                        game_folder_path = safe_rename(game_folder_path, new_folder_path, allowed_roots)
+                        game_folder_path = safe_rename(
+                            game_folder_path, new_folder_path, allowed_roots
+                        )
                         logging.info(f"Renamed folder to: {canonical_name}")
 
                 except Exception as e:
