@@ -275,6 +275,24 @@ wheels = [
 ]
 
 [[package]]
+name = "razorcore"
+version = "1.211.0"
+source = { editable = "../.razorcore" }
+dependencies = [
+    { name = "pyside6" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pyside6", specifier = ">=6.6.0,<7.0.0" }]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "ruff", specifier = ">=0.15.20" },
+    { name = "ty", specifier = ">=0.0.57" },
+]
+
+[[package]]
 name = "ruff"
 version = "0.15.20"
 source = { registry = "https://pypi.org/simple" }
@@ -308,6 +326,7 @@ dependencies = [
     { name = "pyinstaller" },
     { name = "pyside6" },
     { name = "python-levenshtein" },
+    { name = "razorcore" },
 ]
 
 [package.dev-dependencies]
@@ -323,6 +342,7 @@ requires-dist = [
     { name = "pyinstaller", specifier = ">=6.0" },
     { name = "pyside6", specifier = ">=6.8,<7.0.0" },
     { name = "python-levenshtein", specifier = ">=0.27.0" },
+    { name = "razorcore", editable = "../.razorcore" },
 ]
 
 [package.metadata.requires-dev]

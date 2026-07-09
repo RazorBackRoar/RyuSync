@@ -13,6 +13,7 @@ dependencies = [
     "fuzzywuzzy>=0.18.0",
     "python-Levenshtein>=0.27.0",
     "pyinstaller>=6.0",
+    "razorcore>=1.211.0",
 ]
 
 [project.scripts]
@@ -46,3 +47,6 @@ dev = [
     "ruff>=0.15.0",
     "ty>=0.0.20",
 ]
+
+[tool.uv.sources]
+razorcore = { path = "../.razorcore", editable = true }

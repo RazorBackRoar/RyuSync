@@ -18,7 +18,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import QEvent, Qt, QThread, Signal
 from PySide6.QtGui import QColor, QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QProgressBar,
     QPushButton,
@@ -37,10 +38,15 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from razorcore.appinfo import AboutDialog, print_startup_info
+from razorcore.config import get_version
+from razorcore.updates import check_for_updates
 
 from ryusync.app_resources import get_resource_dir, get_resource_path
 
-APP_VERSION = ""
+APP_NAME = "RyuSync"
+PACKAGE_NAME = "ryusync"
+APP_VERSION = get_version(default="1.0.0", package_name=PACKAGE_NAME)
 APP_SUPPORT_DIR = Path.home() / "Library" / "Application Support" / "RyuSync"
 HISTORY_DIR = APP_SUPPORT_DIR / "history"
 SETTINGS_PATH = APP_SUPPORT_DIR / "settings.json"
@@ -2243,7 +2249,7 @@ class DragDropWindow(QMainWindow):
                 border-left-color: rgba(255, 45, 85, 0.45);
                 border-radius: 14px;
                 color: #e0e6ed;
-                font-family: "SF Mono", Menlo, Monaco, monospace;
+                font-family: Menlo, Monaco, monospace;
                 font-size: 13px;
                 padding: 16px;
                 selection-background-color: #00d0ff;
@@ -2261,6 +2267,12 @@ class DragDropWindow(QMainWindow):
         title_column.setSpacing(2)
         title_label = QLabel("RyuSync")
         title_label.setObjectName("titleLabel")
+        title_label.setToolTip("Double-click for About · Right-click for updates")
+        title_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        title_label.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        title_label.customContextMenuRequested.connect(self._show_title_context_menu)
+        title_label.installEventFilter(self)
+        self.title_label = title_label
         title_glow = QGraphicsDropShadowEffect()
         title_glow.setBlurRadius(16)
         title_glow.setColor(QColor(255, 45, 85, 110))
@@ -2335,6 +2347,56 @@ class DragDropWindow(QMainWindow):
         except OSError as exc:
             logging.error("Could not open log folder: %s", exc)
             QMessageBox.warning(self, "Open Logs Failed", user_facing_error(exc))
+
+    def eventFilter(self, obj, event):  # noqa: N802 - Qt override
+        """Open About when the RyuSync title is double-clicked."""
+        if (
+            obj is getattr(self, "title_label", None)
+            and event.type() == QEvent.Type.MouseButtonDblClick
+        ):
+            self._show_about()
+            return True
+        return super().eventFilter(obj, event)
+
+    def _show_about(self) -> None:
+        """Show the standardized razorcore About dialog."""
+        dialog = AboutDialog(self, APP_NAME, package_name=PACKAGE_NAME)
+        dialog.exec()
+
+    def _check_for_updates(self) -> None:
+        """Check GitHub Releases for a newer RyuSync version."""
+        result = check_for_updates(APP_NAME, APP_VERSION)
+        if result.is_error:
+            QMessageBox.warning(
+                self,
+                "Update Check",
+                f"Update check failed: {result.error}",
+            )
+            return
+        if result.update_available:
+            detail = f"New version available: {result.latest_version}"
+            if result.download_url:
+                detail = f"{detail}\n{result.download_url}"
+            if result.release_notes:
+                detail = f"{detail}\n\n{result.release_notes[:400]}"
+            QMessageBox.information(self, "Update Available", detail)
+        else:
+            QMessageBox.information(
+                self,
+                "Up to Date",
+                f"You are up to date (v{APP_VERSION}).",
+            )
+
+    def _show_title_context_menu(self, position) -> None:
+        """Title context menu for About and update checking."""
+        menu = QMenu(self)
+        about_action = menu.addAction("About RyuSync")
+        update_action = menu.addAction("Check for Updates")
+        chosen = menu.exec(self.title_label.mapToGlobal(position))
+        if chosen is about_action:
+            self._show_about()
+        elif chosen is update_action:
+            self._check_for_updates()
 
     def _on_dry_mode_toggled(self, checked: bool) -> None:
         """Persist and display the current processing mode."""
@@ -5727,10 +5789,13 @@ def standardize_filenames_to_folder(root_directoryectory: Path) -> None:
 
 def main() -> None:
     """Main entry point for the application."""
+    print_startup_info(APP_NAME, package_name=PACKAGE_NAME)
     app = QApplication(sys.argv)
     # Fusion style ensures dark QSS renders consistently on macOS (native Aqua
     # ignores parts of dark styling like hover states and some borders).
     app.setStyle("Fusion")
+    app.setApplicationName(APP_NAME)
+    app.setApplicationVersion(APP_VERSION)
     icon_path = get_resource_path("RyuSync.icns", base_file=__file__)
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
