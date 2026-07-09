@@ -40,6 +40,7 @@ from PySide6.QtWidgets import (
 )
 from razorcore.appinfo import AboutDialog, print_startup_info
 from razorcore.config import get_version
+from razorcore.logging import get_log_directory, setup_logging
 from razorcore.updates import check_for_updates
 
 from ryusync.app_resources import get_resource_dir, get_resource_path
@@ -50,12 +51,24 @@ APP_VERSION = get_version(default="1.0.0", package_name=PACKAGE_NAME)
 APP_SUPPORT_DIR = Path.home() / "Library" / "Application Support" / "RyuSync"
 HISTORY_DIR = APP_SUPPORT_DIR / "history"
 SETTINGS_PATH = APP_SUPPORT_DIR / "settings.json"
-LOG_DIR = Path.home() / "Library" / "Logs" / "RyuSync"
-LOG_PATH = LOG_DIR / "RyuSync.log"
 APP_SUPPORT_DIR.mkdir(parents=True, exist_ok=True)
 HISTORY_DIR.mkdir(parents=True, exist_ok=True)
-LOG_DIR.mkdir(parents=True, exist_ok=True)
 
+# Spec path: ~/Library/Application Support/RyuSync/logs/
+LOG_DIR = get_log_directory(APP_NAME)
+LOG_PATH = LOG_DIR / "ryusync.log"
+
+# Initialize logging before optional imports that may log warnings.
+setup_logging(
+    app_name=APP_NAME,
+    level=logging.INFO,
+    log_to_file=True,
+    log_to_console=True,
+    colored_console=True,
+    log_filename="ryusync.log",
+    logger_name=APP_NAME,
+    configure_root=True,
+)
 
 # Try to import fuzzywuzzy with a fallback for installations without it
 fuzz: Any = None
@@ -68,13 +81,6 @@ try:
 except ImportError as exc:
     logging.warning("fuzzywuzzy module not found, fuzzy matching disabled: %s", exc)
     HAS_FUZZY = False
-
-# Initialize logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(), logging.FileHandler(LOG_PATH, encoding="utf-8")],
-)
 
 # Global type hints for clarity
 FileList = list[str]
