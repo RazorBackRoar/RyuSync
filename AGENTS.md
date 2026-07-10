@@ -17,6 +17,12 @@ Native macOS drag-and-drop organizer for Nintendo Switch `.nsp` / `.xci` files (
 
 Dev clones expect sibling `../.razorcore` (editable `razorcore>=1.211.0`). Archive extraction needs `unar` (`brew install unar`).
 
+## CI: vendored razorcore wheel
+
+GitHub Actions installs razorcore from `ci/vendor/` (not the private repo).
+After changing `.razorcore`, run `razorvendor` from the Apps workspace root.
+See `ci/vendor/README.md`.
+
 ## Branding
 
 - Accents: red `#ff2d55`, blue `#00d0ff` (header/footer/drop-zone borders).
@@ -26,8 +32,8 @@ Dev clones expect sibling `../.razorcore` (editable `razorcore>=1.211.0`). Archi
 
 | Surface | Usage |
 |---------|--------|
-| `logging` / `config.get_version` | Logging + version |
-| `appinfo` / `updates` | Startup banner, About, update check |
+| `logging` / `config.get_version` | Logging + version (`package_name=PACKAGE_NAME`) |
+| `appinfo` / `updates` | Startup banner, About (`package_name=PACKAGE_NAME`) |
 | `threading.BaseWorker` | `FolderProcessingWorker` — domain `progress(str,int,int)` kept; `stop()` → `request_cancel()` |
 
 Switch-specific filename/path sanitizers stay local (domain logic).
