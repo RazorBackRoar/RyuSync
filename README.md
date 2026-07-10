@@ -1,7 +1,7 @@
 # RyuSync
 
 [![CI](https://img.shields.io/github/actions/workflow/status/RazorBackRoar/RyuSync/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/RazorBackRoar/RyuSync/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue?style=for-the-badge)](pyproject.toml)
+[![Release](https://img.shields.io/github/v/release/RazorBackRoar/RyuSync?style=for-the-badge&label=release)](https://github.com/RazorBackRoar/RyuSync/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blueviolet?style=for-the-badge)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.14-2ea44f?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![PySide6](https://img.shields.io/badge/PySide6-Qt6-41cd52?style=for-the-badge&logo=qt&logoColor=white)](https://doc.qt.io/qtforpython/)
@@ -35,6 +35,14 @@
 - **Persistent settings** — dry-run preference and fuzzy-match threshold stored under Application Support
 - **Native macOS UI** — dark PySide6 interface with red `#ff2d55` and blue `#00d0ff` brand accents
 - **Apple Silicon native** — arm64 build optimized for M-series Macs
+
+---
+
+## Platform requirements
+
+- macOS 12.0+ on Apple Silicon (arm64)
+- `unar` for archive extraction (`brew install unar`)
+- No Python install required for the packaged `.dmg` / `.app`
 
 ---
 
