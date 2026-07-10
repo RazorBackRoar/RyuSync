@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # Public CI cannot checkout private razorcore; use ci/vendor wheel instead.
+  UV_FIND_LINKS: ci/vendor
+  UV_NO_SOURCES_PACKAGE: razorcore
+
 jobs:
   quality:
     runs-on: macos-latest
@@ -41,3 +46,7 @@ jobs:
       - name: Tests
         working-directory: app
         run: uv run pytest tests/ -q
+
+      - name: Prune cache
+        if: always()
+        run: uv cache prune --ci
