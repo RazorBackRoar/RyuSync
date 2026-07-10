@@ -76,6 +76,7 @@ RyuSync is a file organization utility. It does not download, decrypt, stream, o
 ```bash
 git clone https://github.com/RazorBackRoar/RyuSync.git
 cd RyuSync
+# Workspace layout: sibling Apps/.razorcore provides editable razorcore
 uv sync
 uv run ryusync
 ```
