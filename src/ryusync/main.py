@@ -18,7 +18,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QEvent, Qt, QThread, Signal
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QColor, QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from razorcore.threading import BaseWorker
 from razorcore.appinfo import AboutDialog, print_startup_info
 from razorcore.config import get_version
 from razorcore.logging import get_log_directory, setup_logging
@@ -1379,22 +1380,33 @@ def merge_folders_by_base_id(parent_dir: Path) -> None:
         logging.error(f"Error during folder merge by base id: {e}")
 
 
-class FolderProcessingWorker(QThread):
+class FolderProcessingWorker(BaseWorker):
+    """Queue worker for folder organize jobs.
+
+    Uses razorcore ``BaseWorker`` for cancel/pause plumbing. Domain progress
+    stays on a custom ``progress(str, int, int)`` signal (folder, done, total)
+    because it is not the generic ``(current, total, message)`` schema.
+    """
+
     progress = Signal(str, int, int)  # folder, processed, total
     summary = Signal(str)  # summary text
-    error = Signal(str)  # error message
+    # BaseWorker already defines error = Signal(str)
     finished_folder = Signal(str)  # folder path when done
     file_counts = Signal(dict)  # dictionary of file counts for updating global counters
 
     def __init__(self, folder_queue, parent=None):
         super().__init__(parent)
         self.folder_queue = folder_queue
-        self._stop_requested = False
         self.game_organizer = GameOrganizer()  # Create own instance for thread safety
         self._extraction_errors: list[str] = []
 
-    def run(self):
-        while not self._stop_requested:
+    def do_work(self):
+        """BaseWorker entry — drain the folder queue until cancelled."""
+        self.run_queue()
+        return {}
+
+    def run_queue(self):
+        while not self.is_cancelled:
             try:
                 # Unpack the queue item. Items are (processing_path,
                 # original_parent[, archives_to_extract]); the third element is
@@ -2079,7 +2091,8 @@ class FolderProcessingWorker(QThread):
         merge_folders_by_base_id(parent_dir)
 
     def stop(self):
-        self._stop_requested = True
+        """Backward-compatible alias for razorcore ``request_cancel()``."""
+        self.request_cancel()
 
 
 class DragDropWindow(QMainWindow):
