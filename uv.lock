@@ -21,54 +21,12 @@ wheels = [
 ]
 
 [[package]]
-name = "fuzzywuzzy"
-version = "0.18.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/11/4b/0a002eea91be6048a2b5d53c5f1b4dafd57ba2e36eea961d05086d7c28ce/fuzzywuzzy-0.18.0.tar.gz", hash = "sha256:45016e92264780e58972dca1b3d939ac864b78437422beecebb3095f8efd00e8", size = 28888, upload-time = "2020-02-13T21:06:27.054Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/43/ff/74f23998ad2f93b945c0309f825be92e04e0348e062026998b5eefef4c33/fuzzywuzzy-0.18.0-py2.py3-none-any.whl", hash = "sha256:928244b28db720d1e0ee7587acf660ea49d7e4c632569cad4f1cd7e68a5f0993", size = 18272, upload-time = "2020-02-13T21:06:25.209Z" },
-]
-
-[[package]]
 name = "iniconfig"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/72/34/14ca021ce8e5dfedc35312d08ba8bf51fdd999c576889fc2c24cb97f4f10/iniconfig-2.3.0.tar.gz", hash = "sha256:c76315c77db068650d49c5b56314774a7804df16fee4402c1f19d6d15d8c4730", size = 20503, upload-time = "2025-10-18T21:55:43.219Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cb/b1/3846dd7f199d53cb17f49cba7e651e9ce294d8497c8c150530ed11865bb8/iniconfig-2.3.0-py3-none-any.whl", hash = "sha256:f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12", size = 7484, upload-time = "2025-10-18T21:55:41.639Z" },
-]
-
-[[package]]
-name = "levenshtein"
-version = "0.27.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "rapidfuzz" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/82/56/dcf68853b062e3b94bdc3d011cc4198779abc5b9dc134146a062920ce2e2/levenshtein-0.27.3.tar.gz", hash = "sha256:1ac326b2c84215795163d8a5af471188918b8797b4953ec87aaba22c9c1f9fc0", size = 393269, upload-time = "2025-11-01T12:14:31.04Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f3/e1/2f705da403f865a5fa3449b155738dc9c53021698fd6926253a9af03180b/levenshtein-0.27.3-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:a6728bfae9a86002f0223576675fc7e2a6e7735da47185a1d13d1eaaa73dd4be", size = 169457, upload-time = "2025-11-01T12:13:53.778Z" },
-    { url = "https://files.pythonhosted.org/packages/76/2c/bb6ef359e007fe7b6b3195b68a94f4dd3ecd1885ee337ee8fbd4df55996f/levenshtein-0.27.3-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:8e5037c4a6f97a238e24aad6f98a1e984348b7931b1b04b6bd02bd4f8238150d", size = 158680, upload-time = "2025-11-01T12:13:55.005Z" },
-    { url = "https://files.pythonhosted.org/packages/51/7b/de1999f4cf1cfebc3fbbf03a6d58498952d6560d9798af4b0a566e6b6f30/levenshtein-0.27.3-cp314-cp314-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:c6cf5ecf9026bf24cf66ad019c6583f50058fae3e1b3c20e8812455b55d597f1", size = 133167, upload-time = "2025-11-01T12:13:56.426Z" },
-    { url = "https://files.pythonhosted.org/packages/c7/da/aaa7f3a0a8ae8744b284043653652db3d7d93595517f9ed8158c03287692/levenshtein-0.27.3-cp314-cp314-manylinux_2_24_armv7l.manylinux_2_31_armv7l.whl", hash = "sha256:9285084bd2fc19adb47dab54ed4a71f57f78fe0d754e4a01e3c75409a25aed24", size = 114530, upload-time = "2025-11-01T12:13:57.883Z" },
-    { url = "https://files.pythonhosted.org/packages/29/ce/ed422816fb30ffa3bc11597b30d5deca06b4a1388707a04215da73c65b53/levenshtein-0.27.3-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:ce3bbbe92172a08b599d79956182c6b7ab6ec8d4adbe7237417a363b968ad87b", size = 153325, upload-time = "2025-11-01T12:13:59.318Z" },
-    { url = "https://files.pythonhosted.org/packages/d9/5a/a225477a0bda154f19f1c07a5e35500d631ae25dfd620b479027d79f0d4c/levenshtein-0.27.3-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:9dac48fab9d166ca90e12fb6cf6c7c8eb9c41aacf7136584411e20f7f136f745", size = 1114956, upload-time = "2025-11-01T12:14:00.543Z" },
-    { url = "https://files.pythonhosted.org/packages/ca/c4/a1be1040f3cce516a5e2be68453fd0c32ac63b2e9d31f476723fd8002c09/levenshtein-0.27.3-cp314-cp314-musllinux_1_2_armv7l.whl", hash = "sha256:d37a83722dc5326c93d17078e926c4732dc4f3488dc017c6839e34cd16af92b7", size = 1007610, upload-time = "2025-11-01T12:14:02.036Z" },
-    { url = "https://files.pythonhosted.org/packages/86/d7/6f50e8a307e0c2befd819b481eb3a4c2eacab3dd8101982423003fac8ea3/levenshtein-0.27.3-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:3466cb8294ce586e49dd467560a153ab8d296015c538223f149f9aefd3d9f955", size = 1185379, upload-time = "2025-11-01T12:14:03.385Z" },
-    { url = "https://files.pythonhosted.org/packages/6b/e5/5d8fb1b3ebd5735f53221bf95c923066bcfc132234925820128f7eee5b47/levenshtein-0.27.3-cp314-cp314-win32.whl", hash = "sha256:c848bf2457b268672b7e9e73b44f18f49856420ac50b2564cf115a6e4ef82688", size = 86328, upload-time = "2025-11-01T12:14:04.74Z" },
-    { url = "https://files.pythonhosted.org/packages/30/82/8a9ccbdb4e38bd4d516f2804999dccb8cb4bcb4e33f52851735da0c73ea7/levenshtein-0.27.3-cp314-cp314-win_amd64.whl", hash = "sha256:742633f024362a4ed6ef9d7e75d68f74b041ae738985fcf55a0e6d1d4cade438", size = 96640, upload-time = "2025-11-01T12:14:06.24Z" },
-    { url = "https://files.pythonhosted.org/packages/14/86/f9d15919f59f5d92c6baa500315e1fa0143a39d811427b83c54f038267ca/levenshtein-0.27.3-cp314-cp314-win_arm64.whl", hash = "sha256:9eed6851224b19e8d588ddb8eb8a4ae3c2dcabf3d1213985f0b94a67e517b1df", size = 89689, upload-time = "2025-11-01T12:14:07.379Z" },
-    { url = "https://files.pythonhosted.org/packages/ed/f6/10f44975ae6dc3047b2cd260e3d4c3a5258b8d10690a42904115de24fc51/levenshtein-0.27.3-cp314-cp314t-macosx_10_15_x86_64.whl", hash = "sha256:77de69a345c76227b51a4521cd85442eb3da54c7eb6a06663a20c058fc49e683", size = 170518, upload-time = "2025-11-01T12:14:09.196Z" },
-    { url = "https://files.pythonhosted.org/packages/08/07/fa294a145a0c99a814a9a807614962c1ee0f5749ca691645980462027d5d/levenshtein-0.27.3-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:eba2756dc1f5b962b0ff80e49abb2153d5e809cc5e7fa5e85be9410ce474795d", size = 159097, upload-time = "2025-11-01T12:14:10.404Z" },
-    { url = "https://files.pythonhosted.org/packages/ae/50/24bdf37813fc30f293e53b46022b091144f4737a6a66663d2235b311bb98/levenshtein-0.27.3-cp314-cp314t-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:2c8fcb498287e971d84260f67808ff1a06b3f6212d80fea75cf5155db80606ff", size = 136650, upload-time = "2025-11-01T12:14:11.579Z" },
-    { url = "https://files.pythonhosted.org/packages/d0/a9/0399c7a190b277cdea3acc801129d9d30da57c3fa79519e7b8c3f080d86c/levenshtein-0.27.3-cp314-cp314t-manylinux_2_24_armv7l.manylinux_2_31_armv7l.whl", hash = "sha256:f067092c67464faab13e00a5c1a80da93baca8955d4d49579861400762e35591", size = 117515, upload-time = "2025-11-01T12:14:12.877Z" },
-    { url = "https://files.pythonhosted.org/packages/bf/a4/1c27533e97578b385a4b8079abe8d1ce2e514717c761efbe4bf7bbd0ac2e/levenshtein-0.27.3-cp314-cp314t-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:92415f32c68491203f2855d05eef3277d376182d014cf0859c013c89f277fbbf", size = 155711, upload-time = "2025-11-01T12:14:13.985Z" },
-    { url = "https://files.pythonhosted.org/packages/50/35/bbc26638394a72b1e31a685ec251c995ee66a630c7e5c86f98770928b632/levenshtein-0.27.3-cp314-cp314t-musllinux_1_2_aarch64.whl", hash = "sha256:ef61eeaf1e0a42d7d947978d981fe4b9426b98b3dd8c1582c535f10dee044c3f", size = 1116692, upload-time = "2025-11-01T12:14:15.359Z" },
-    { url = "https://files.pythonhosted.org/packages/cd/83/32fcf28b388f8dc6c36b54552b9bae289dab07d43df104893158c834cbcc/levenshtein-0.27.3-cp314-cp314t-musllinux_1_2_armv7l.whl", hash = "sha256:103bb2e9049d1aa0d1216dd09c1c9106ecfe7541bbdc1a0490b9357d42eec8f2", size = 1003167, upload-time = "2025-11-01T12:14:17.469Z" },
-    { url = "https://files.pythonhosted.org/packages/d1/79/1fbf2877ec4b819f373a32ebe3c48a61ee810693593a6015108b0be97b78/levenshtein-0.27.3-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:6a64ddd1986b2a4c468b09544382287315c53585eb067f6e200c337741e057ee", size = 1189417, upload-time = "2025-11-01T12:14:19.081Z" },
-    { url = "https://files.pythonhosted.org/packages/d3/ac/dad4e09f1f7459c64172e48e40ed2baf3aa92d38205bcbd1b4ff00853701/levenshtein-0.27.3-cp314-cp314t-win32.whl", hash = "sha256:957244f27dc284ccb030a8b77b8a00deb7eefdcd70052a4b1d96f375780ae9dc", size = 88144, upload-time = "2025-11-01T12:14:20.667Z" },
-    { url = "https://files.pythonhosted.org/packages/c0/61/cd51dc8b8a382e17c559a9812734c3a9afc2dab7d36253516335ee16ae50/levenshtein-0.27.3-cp314-cp314t-win_amd64.whl", hash = "sha256:ccd7eaa6d8048c3ec07c93cfbcdefd4a3ae8c6aca3a370f2023ee69341e5f076", size = 98516, upload-time = "2025-11-01T12:14:21.786Z" },
-    { url = "https://files.pythonhosted.org/packages/27/5e/3fb67e882c1fee01ebb7abc1c0a6669e5ff8acd060e93bfe7229e9ce6e4f/levenshtein-0.27.3-cp314-cp314t-win_arm64.whl", hash = "sha256:1d8520b89b7a27bb5aadbcc156715619bcbf556a8ac46ad932470945dca6e1bd", size = 91020, upload-time = "2025-11-01T12:14:22.944Z" },
 ]
 
 [[package]]
@@ -224,18 +182,6 @@ wheels = [
 ]
 
 [[package]]
-name = "python-levenshtein"
-version = "0.27.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "levenshtein" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/f6/b4/36eda4188dd19d3cb53d8a8749d7520bd23dfe1c1f44e56ea9dcd0232274/python_levenshtein-0.27.3.tar.gz", hash = "sha256:27dc2d65aeb62a7d6852388f197073296370779286c0860b087357f3b8129a62", size = 12446, upload-time = "2025-11-01T12:54:59.712Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/7b/5b/26e3cca2589252ceabf964ba81514e6f48556553c9c2766e1a0fdceec696/python_levenshtein-0.27.3-py3-none-any.whl", hash = "sha256:5d6168a8e8befb25abf04d2952368a446722be10e8ced218d0dc4fd3703a43a1", size = 9504, upload-time = "2025-11-01T12:54:58.933Z" },
-]
-
-[[package]]
 name = "pywin32-ctypes"
 version = "0.2.3"
 source = { registry = "https://pypi.org/simple" }
@@ -322,15 +268,14 @@ name = "ryusync"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [
-    { name = "fuzzywuzzy" },
-    { name = "pyinstaller" },
     { name = "pyside6" },
-    { name = "python-levenshtein" },
+    { name = "rapidfuzz" },
     { name = "razorcore" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "pyinstaller" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "ty" },
@@ -338,15 +283,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fuzzywuzzy", specifier = ">=0.18.0" },
-    { name = "pyinstaller", specifier = ">=6.0" },
     { name = "pyside6", specifier = ">=6.8,<7.0.0" },
-    { name = "python-levenshtein", specifier = ">=0.27.0" },
+    { name = "rapidfuzz", specifier = ">=3.0.0" },
     { name = "razorcore", editable = "../.razorcore" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "pyinstaller", specifier = ">=6.0" },
     { name = "pytest", specifier = ">=8.4" },
     { name = "ruff", specifier = ">=0.15.0" },
     { name = "ty", specifier = ">=0.0.20" },

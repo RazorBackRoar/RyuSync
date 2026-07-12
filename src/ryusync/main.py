@@ -38,10 +38,10 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from razorcore.threading import BaseWorker
 from razorcore.appinfo import AboutDialog, print_startup_info
 from razorcore.config import get_version
 from razorcore.logging import get_log_directory, setup_logging
+from razorcore.threading import BaseWorker
 from razorcore.updates import check_for_updates
 
 from ryusync.app_resources import get_resource_dir, get_resource_path
@@ -71,16 +71,16 @@ setup_logging(
     configure_root=True,
 )
 
-# Try to import fuzzywuzzy with a fallback for installations without it
+# Try to import rapidfuzz with a fallback for installations without it
 fuzz: Any = None
 process: Any = None
 try:
-    fuzz = importlib.import_module("fuzzywuzzy.fuzz")
-    process = importlib.import_module("fuzzywuzzy.process")
+    fuzz = importlib.import_module("rapidfuzz.fuzz")
+    process = importlib.import_module("rapidfuzz.process")
 
     HAS_FUZZY = True
 except ImportError as exc:
-    logging.warning("fuzzywuzzy module not found, fuzzy matching disabled: %s", exc)
+    logging.warning("rapidfuzz module not found, fuzzy matching disabled: %s", exc)
     HAS_FUZZY = False
 
 # Global type hints for clarity
