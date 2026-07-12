@@ -3430,9 +3430,7 @@ class DragDropWindow(QMainWindow):
                 standardize_filenames_to_folder(directory)
             except Exception as e:
                 logging.error(f"Error during filename standardization: {e}")
-                self.log_failure(
-                    f"Error during filename standardization step: {e!s}"
-                )
+                self.log_failure(f"Error during filename standardization step: {e!s}")
             # --- END NEW STEP ---
 
             # Step 8: Final cleanup of unwanted files (like .DS_Store potentially created)
@@ -4640,7 +4638,8 @@ class DragDropWindow(QMainWindow):
 class GameOrganizer:
     """Organize game files and folders with improved handling of abbreviations and fuzzy matching."""
 
-    def __init__(self):
+    def __init__(self, dry_run: bool = False):
+        self.dry_run = dry_run
         self.resources_dir = str(get_resource_dir(base_file=__file__))
         self.similarity_threshold = 70  # Lowered threshold for better matching
         self.canonical_folder_map = {}
