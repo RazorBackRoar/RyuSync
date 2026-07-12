@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# ruff: noqa: D200, D205, D208, D212, D415, N802
 
 import filecmp
 import importlib
@@ -1468,9 +1467,9 @@ class FolderProcessingWorker(BaseWorker):
                         )
                 except Exception as e:
                     logging.error(
-                        f"Error in process_folder_logic: {str(e)}", exc_info=True
+                        f"Error in process_folder_logic: {e!s}", exc_info=True
                     )
-                    self.error.emit(f"Error processing {processing_path}: {str(e)}")
+                    self.error.emit(f"Error processing {processing_path}: {e!s}")
 
                 # Signal that this folder is complete
                 self.finished_folder.emit(str(processing_path))
@@ -1478,8 +1477,8 @@ class FolderProcessingWorker(BaseWorker):
                 # Mark the task as done in the queue
                 self.folder_queue.task_done()
             except Exception as e:
-                logging.error(f"Worker thread error: {str(e)}", exc_info=True)
-                self.error.emit(f"Worker error: {str(e)}")
+                logging.error(f"Worker thread error: {e!s}", exc_info=True)
+                self.error.emit(f"Worker error: {e!s}")
                 # Still mark the task as done even if there was an error
                 try:
                     self.folder_queue.task_done()
@@ -2367,7 +2366,7 @@ class DragDropWindow(QMainWindow):
             logging.error("Could not open log folder: %s", exc)
             QMessageBox.warning(self, "Open Logs Failed", user_facing_error(exc))
 
-    def eventFilter(self, obj, event):  # noqa: N802 - Qt override
+    def eventFilter(self, obj, event):
         """Open About when the RyuSync title is double-clicked."""
         if (
             obj is getattr(self, "title_label", None)
@@ -2820,7 +2819,7 @@ class DragDropWindow(QMainWindow):
                         self, "Error", "The path to process does not exist."
                     )
             except Exception as e:
-                self.log_failure(f"Error queueing {queue_item[0]}: {str(e)}")
+                self.log_failure(f"Error queueing {queue_item[0]}: {e!s}")
                 QMessageBox.warning(
                     self,
                     "Error",
@@ -3424,7 +3423,7 @@ class DragDropWindow(QMainWindow):
                 merge_folders_by_base_id(directory)
             except Exception as e:
                 logging.error(f"Error during folder merge: {e}")
-                self.log_failure(f"Error during folder merge step: {str(e)}")
+                self.log_failure(f"Error during folder merge step: {e!s}")
 
             # --- NEW STEP 7.5: Standardize filenames to match folder names ---
             try:
@@ -3432,7 +3431,7 @@ class DragDropWindow(QMainWindow):
             except Exception as e:
                 logging.error(f"Error during filename standardization: {e}")
                 self.log_failure(
-                    f"Error during filename standardization step: {str(e)}"
+                    f"Error during filename standardization step: {e!s}"
                 )
             # --- END NEW STEP ---
 
@@ -4899,7 +4898,7 @@ class GameOrganizer:
                         )
                 except Exception as e:
                     logging.error(
-                        f"Error moving (organize_files) {file_path.name} to {target_path}: {str(e)}"
+                        f"Error moving (organize_files) {file_path.name} to {target_path}: {e!s}"
                     )
 
         self.consolidate_apostrophe_folders(str(base_dir))
