@@ -223,20 +223,16 @@ wheels = [
 [[package]]
 name = "razorcore"
 version = "1.211.0"
-source = { editable = "../.razorcore" }
+source = { path = "ci/vendor/razorcore-1.211.0-py3-none-any.whl" }
 dependencies = [
     { name = "pyside6" },
+]
+wheels = [
+    { filename = "razorcore-1.211.0-py3-none-any.whl", hash = "sha256:6a7795c28b5166cce63b4e2d847e9ddaf22ff212374ed40d1d961906cebea9d0" },
 ]
 
 [package.metadata]
 requires-dist = [{ name = "pyside6", specifier = ">=6.6.0,<7.0.0" }]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=9.1.1" },
-    { name = "ruff", specifier = ">=0.15.20" },
-    { name = "ty", specifier = ">=0.0.57" },
-]
 
 [[package]]
 name = "ruff"
@@ -285,7 +281,7 @@ dev = [
 requires-dist = [
     { name = "pyside6", specifier = ">=6.8,<7.0.0" },
     { name = "rapidfuzz", specifier = ">=3.0.0" },
-    { name = "razorcore", editable = "../.razorcore" },
+    { name = "razorcore", path = "ci/vendor/razorcore-1.211.0-py3-none-any.whl" },
 ]
 
 [package.metadata.requires-dev]
