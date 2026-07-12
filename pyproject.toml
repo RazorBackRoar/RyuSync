@@ -48,4 +48,4 @@ dev = [
 ]
 
 [tool.uv.sources]
-razorcore = { path = "../.razorcore", editable = true }
+razorcore = { path = "ci/vendor/razorcore-1.211.0-py3-none-any.whl" }
