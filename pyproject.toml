@@ -44,7 +44,7 @@ dev = [
     "pyinstaller>=6.0",
     "pytest>=8.4",
     "ruff>=0.15.0",
-    "ty>=0.0.20",
+    "ty>=0.0.59",
 ]
 
 [tool.uv.sources]
