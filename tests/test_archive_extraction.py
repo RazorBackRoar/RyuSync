@@ -3,7 +3,7 @@
 Dropping a .rar/.zip/.7z (or a folder containing them) should extract the
 archive IN THE SAME FOLDER, organize the resulting .nsp/.xci, remove the
 original archive once organization succeeds, and delete any .url/.URL shortcut
-files (e.g. "Ziperto - A Digital Park for Gamers.URL") that land in the
+files (e.g. "Vendor - Site shortcut.URL") that land in the
 processing folder — whether they came from inside the archive or were sitting
 beside it. Failed extractions (corrupt / password-protected archives) preserve
 the original so the user can retry. Dry Mode must report the archive but never
@@ -26,7 +26,6 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
-
 from ryusync import (
     DragDropWindow,
     FolderProcessingWorker,
@@ -56,7 +55,7 @@ def window(qapp: QApplication) -> DragDropWindow:
 
 
 NSP_NAME = "My Game [0100A77018EA0000].nsp"
-URL_NAME = "Ziperto - A Digital Park for Gamers.URL"
+URL_NAME = "Vendor - Site shortcut.URL"
 
 
 def _zip_of_nsp(zip_path: Path, nsp_name: str = NSP_NAME) -> Path:
@@ -97,7 +96,7 @@ def test_is_archive_file(tmp_path: Path) -> None:
 
 def test_should_clean_file_url_shortcuts() -> None:
     # The exact shortcut file the user reported must be flagged for cleanup.
-    assert should_clean_file(Path("Ziperto - A Digital Park for Gamers.URL")) is True
+    assert should_clean_file(Path("Vendor - Site shortcut.URL")) is True
     assert should_clean_file(Path("anything.URL")) is True
     assert should_clean_file(Path("anything.url")) is True
     # Game files and unrelated files are NOT cleanup targets.

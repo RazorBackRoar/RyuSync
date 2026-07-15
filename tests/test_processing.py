@@ -112,14 +112,8 @@ def test_worker_process_folder_logic_groups_snake_case_dlc_together(
     directory = tmp_path / "drop"
     directory.mkdir()
 
-    (
-        directory
-        / "V-Final_fantasy_tactics_the_ivalice_chronicles_deluxe_edition_bonuses_dlc.nsp"
-    ).write_text("")
-    (
-        directory
-        / "V-Final_fantasy_tactics_the_ivalice_chronicles_pre_order_bonuses_dlc.nsp"
-    ).write_text("")
+    (directory / "V-Example_game_title_deluxe_edition_bonuses_dlc.nsp").write_text("")
+    (directory / "V-Example_game_title_pre_order_bonuses_dlc.nsp").write_text("")
 
     q: queue.Queue = queue.Queue()
     worker = FolderProcessingWorker(q)

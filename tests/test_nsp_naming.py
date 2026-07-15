@@ -64,12 +64,12 @@ def test_get_base_name_preserves_full_title(filename: str, expected_base: str) -
         # Snake-case DLC descriptors should be stripped so the same game's DLCs
         # share a single base name.
         (
-            "V-Final_fantasy_tactics_the_ivalice_chronicles_deluxe_edition_bonuses_dlc.nsp",
-            "V Final fantasy tactics the ivalice chronicles",
+            "V-Example_game_title_deluxe_edition_bonuses_dlc.nsp",
+            "V Example game title",
         ),
         (
-            "V-Final_fantasy_tactics_the_ivalice_chronicles_pre_order_bonuses_dlc.nsp",
-            "V Final fantasy tactics the ivalice chronicles",
+            "V-Example_game_title_pre_order_bonuses_dlc.nsp",
+            "V Example game title",
         ),
     ],
 )
@@ -141,14 +141,14 @@ def test_get_base_name_strips_dlc_descriptors_for_dlc_files(
         # Snake-case DLC filenames should be split into a base game title and a
         # descriptor, both tagged as [DLC].
         (
-            "V-Final_fantasy_tactics_the_ivalice_chronicles_deluxe_edition_bonuses_dlc.nsp",
-            "V Final Fantasy Tactics the Ivalice Chronicles - Deluxe Edition Bonuses DLC [DLC].nsp",
-            "V Final Fantasy Tactics The Ivalice Chronicles Deluxe Edition Bonuses DLC [DLC].nsp",
+            "V-Example_game_title_deluxe_edition_bonuses_dlc.nsp",
+            "V Example Game Title - Deluxe Edition Bonuses DLC [DLC].nsp",
+            "V Example Game Title Deluxe Edition Bonuses DLC [DLC].nsp",
         ),
         (
-            "V-Final_fantasy_tactics_the_ivalice_chronicles_pre_order_bonuses_dlc.nsp",
-            "V Final Fantasy Tactics the Ivalice Chronicles - Pre Order Bonuses DLC [DLC].nsp",
-            "V Final Fantasy Tactics The Ivalice Chronicles Pre Order Bonuses DLC [DLC].nsp",
+            "V-Example_game_title_pre_order_bonuses_dlc.nsp",
+            "V Example Game Title - Pre Order Bonuses DLC [DLC].nsp",
+            "V Example Game Title Pre Order Bonuses DLC [DLC].nsp",
         ),
     ],
 )

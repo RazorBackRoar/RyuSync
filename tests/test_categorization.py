@@ -44,11 +44,11 @@ from ryusync import FileType, categorize_file
         ("My Game DLC Pack [0100A77018EA1000].nsp", FileType.DLC),
         # Snake-case / kebab-case DLC filenames without explicit [DLC] tag.
         (
-            "V-Final_fantasy_tactics_the_ivalice_chronicles_deluxe_edition_bonuses_dlc.nsp",
+            "V-Example_game_title_deluxe_edition_bonuses_dlc.nsp",
             FileType.DLC,
         ),
         (
-            "V-Final_fantasy_tactics_the_ivalice_chronicles_pre_order_bonuses_dlc.nsp",
+            "V-Example_game_title_pre_order_bonuses_dlc.nsp",
             FileType.DLC,
         ),
         ("Game-Pre-Order-Bonus.nsp", FileType.DLC),
