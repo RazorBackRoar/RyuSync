@@ -65,11 +65,11 @@ def test_get_base_name_preserves_full_title(filename: str, expected_base: str) -
         # share a single base name.
         (
             "V-Example_game_title_deluxe_edition_bonuses_dlc.nsp",
-            "V Example game title",
+            "Example game title",
         ),
         (
             "V-Example_game_title_pre_order_bonuses_dlc.nsp",
-            "V Example game title",
+            "Example game title",
         ),
     ],
 )
@@ -142,13 +142,13 @@ def test_get_base_name_strips_dlc_descriptors_for_dlc_files(
         # descriptor, both tagged as [DLC].
         (
             "V-Example_game_title_deluxe_edition_bonuses_dlc.nsp",
-            "V Example Game Title - Deluxe Edition Bonuses DLC [DLC].nsp",
-            "V Example Game Title Deluxe Edition Bonuses DLC [DLC].nsp",
+            "Example Game Title - Deluxe Edition Bonuses DLC [DLC].nsp",
+            "Example Game Title Deluxe Edition Bonuses DLC [DLC].nsp",
         ),
         (
             "V-Example_game_title_pre_order_bonuses_dlc.nsp",
-            "V Example Game Title - Pre Order Bonuses DLC [DLC].nsp",
-            "V Example Game Title Pre Order Bonuses DLC [DLC].nsp",
+            "Example Game Title - Pre Order Bonuses DLC [DLC].nsp",
+            "Example Game Title Pre Order Bonuses DLC [DLC].nsp",
         ),
     ],
 )

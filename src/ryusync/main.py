@@ -770,14 +770,19 @@ def smart_title_case(text: str) -> str:
     return restore_roman_numerals(result)
 
 
+def strip_leading_v(name: str) -> str:
+    """Remove a leading 'V' release tag from a dump name (e.g. 'V-Final ...' -> 'Final ...')."""
+    return re.sub(r"^[Vv]\b[ _\-]*", "", name).strip()
+
+
 def _get_base_name(filename: str, is_dlc: bool = False) -> str:
     """
     Extract clean base name from filename by removing common tags and patterns.
 
     Args:
         filename: The filename to clean
-        is_dlc: If True, strip trailing DLC descriptor tokens so the same game's
-            DLC files share a single base name.
+        is_dlc: If True, strip trailing DLC descriptor tokens and leading 'V' release
+            tags so the same game's DLC files share a single base name.
 
     Returns:
         str: Clean base name without tags and patterns
@@ -844,9 +849,11 @@ def _get_base_name(filename: str, is_dlc: bool = False) -> str:
         if not name and leading_game_name:
             name = re.sub(r"[\s_\-]+", " ", leading_game_name).strip()
 
-        # For DLC files, strip trailing descriptors like "deluxe edition bonuses dlc"
-        # so multiple DLCs for the same game share a single base name.
+        # For DLC files, strip leading release tags like "V-" and trailing descriptors
+        # like "deluxe edition bonuses dlc" so multiple DLCs for the same game share
+        # a single base name.
         if is_dlc:
+            name = strip_leading_v(name)
             base_tokens, _ = split_dlc_name(name)
             name = " ".join(base_tokens)
 
@@ -881,6 +888,7 @@ def get_clean_base_name(filename: str, is_dlc: bool = False) -> str:
     name = name.replace("®", "").replace("™", "").strip()
     name = re.sub(r"[\s_\-]+", " ", name)
     if is_dlc:
+        name = strip_leading_v(name)
         base_tokens, _ = split_dlc_name(name)
         name = " ".join(base_tokens)
     return name if name else "Unknown Game"
@@ -1859,7 +1867,16 @@ class FolderProcessingWorker(BaseWorker):
         # Second pass: Create folders and move files
         logging.info("Second pass: Creating folders and moving files...")
         processed_files_count = 0
-        for file_path in all_files_at_root:
+        folder_path_by_name: dict[str, Path] = {}
+        # Process base games/updates first so DLCs can fuzzy-match to existing folders
+        sorted_files = sorted(
+            all_files_at_root,
+            key=lambda p: (
+                0 if categorize_file(p.name) in (FileType.GAME, FileType.UPDATE) else 1,
+                p.name,
+            ),
+        )
+        for file_path in sorted_files:
             if not file_path.exists():
                 continue
             filename = file_path.name
@@ -1894,9 +1911,17 @@ class FolderProcessingWorker(BaseWorker):
                     if not new_path.exists():
                         safe_rename(game_folder, new_path, allowed_roots)
                         game_folder = new_path
+            elif canonical_folder_name in folder_path_by_name:
+                game_folder = folder_path_by_name[canonical_folder_name]
+            elif match_name := self.game_organizer.fuzzy_match(
+                canonical_folder_name, list(folder_path_by_name.keys())
+            ):
+                game_folder = folder_path_by_name[match_name]
+                canonical_folder_name = match_name
             else:
                 game_folder = directory / canonical_folder_name
                 safe_mkdir(game_folder, allowed_roots, exist_ok=True)
+                folder_path_by_name[canonical_folder_name] = game_folder
             group_key_to_folder[group_key] = game_folder
 
             # Apply final renaming rules to the file (ALWAYS tags file as [GME]/[UPD]/[DLC])
@@ -2153,6 +2178,7 @@ class FolderProcessingWorker(BaseWorker):
             # 4. Extract DLC description (if applicable)
             dlc_desc_part = ""
             if file_type == FileType.DLC:
+                base_name = strip_leading_v(base_name)
                 base_tokens, desc_tokens = split_dlc_name(base_name)
                 base_name = " ".join(base_tokens)
                 if desc_tokens:
@@ -3751,10 +3777,11 @@ class DragDropWindow(QMainWindow):
 
             base_name = sanitize_possessive(base_name) or "Unknown Game"
 
-            # For DLC files, strip trailing descriptors (e.g. "deluxe edition bonuses dlc")
-            # from the base name so the same game's DLCs group together, and keep the
-            # descriptor for the filename.
+            # For DLC files, strip leading release tags and trailing descriptors
+            # (e.g. "deluxe edition bonuses dlc") from the base name so the same game's
+            # DLCs group together, and keep the descriptor for the filename.
             if file_type == FileType.DLC:
+                base_name = strip_leading_v(base_name)
                 base_tokens, desc_tokens = split_dlc_name(base_name)
                 base_name = " ".join(base_tokens)
                 if desc_tokens and not dlc_desc:
