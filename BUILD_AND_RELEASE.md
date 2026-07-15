@@ -11,7 +11,7 @@ RyuSync is a native macOS app built with **Python 3.14**, **uv**, and
 ## Platform Requirements
 
 | Requirement | Value |
-|-------------|-------|
+| ----------- | ----- |
 | OS | macOS 12+ (Apple Silicon recommended) |
 | Arch | `arm64` |
 | Python | **3.14** (uv-managed) |
@@ -78,7 +78,7 @@ RazorBackRoar apps.
 ## Troubleshooting
 
 | Symptom | What to try |
-|---------|-------------|
+| ------- | ----------- |
 | `uv sync` fails resolving `razorcore` | Ensure sibling `Apps/.razorcore` exists, or use the CI vendor wheel path documented in `ci/` |
 | Gatekeeper blocks first launch | Right-click → **Open** (ad-hoc signed builds) |
 | PyInstaller missing modules | Rebuild with a clean `dist/` / `build/`; check `*.spec` excludes |
