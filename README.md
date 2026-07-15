@@ -1,7 +1,7 @@
 # RyuSync
 
 [![CI](https://img.shields.io/github/actions/workflow/status/RazorBackRoar/RyuSync/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/RazorBackRoar/RyuSync/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-1.0.1-blue?style=for-the-badge)](pyproject.toml)
+[![Version](https://img.shields.io/badge/version-1.0.2-blue?style=for-the-badge)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blueviolet?style=for-the-badge)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.14-2ea44f?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![PySide6](https://img.shields.io/badge/PySide6-Qt6-41cd52?style=for-the-badge&logo=qt&logoColor=white)](https://doc.qt.io/qtforpython/)
