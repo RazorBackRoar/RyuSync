@@ -220,6 +220,110 @@ DLC_CONTENT_PATTERNS = [
     "Expansion",
 ]
 
+# Trailing tokens that identify DLC content descriptors (e.g. "deluxe edition bonuses dlc")
+DLC_DESCRIPTOR_WORDS = {
+    "dlc",
+    "dlcs",
+    "dlc's",
+    "bonus",
+    "bonuses",
+    "pack",
+    "packs",
+    "pass",
+    "season",
+    "expansion",
+    "costume",
+    "character",
+    "item",
+    "items",
+    "starter",
+    "outfit",
+    "raiment",
+    "garb",
+    "hairstyle",
+    "ticket",
+    "set",
+    "sets",
+    "kit",
+    "kits",
+    "bundle",
+    "bundles",
+    "addon",
+    "add",
+    "on",
+    "content",
+    "contents",
+    "cosmetic",
+    "cosmetics",
+    "skin",
+    "skins",
+    "additional",
+    "extra",
+    "extras",
+}
+
+# Qualifier words that can appear immediately before/around descriptor words
+DLC_DESCRIPTOR_QUALIFIERS = {
+    "deluxe",
+    "edition",
+    "pre",
+    "order",
+    "preorder",
+    "pre-order",
+    "gold",
+    "ultimate",
+    "complete",
+    "collector",
+    "special",
+    "limited",
+    "digital",
+    "early",
+    "access",
+    "beta",
+    "alpha",
+    "demo",
+    "free",
+    "exclusive",
+    "launch",
+    "day",
+    "one",
+    "release",
+    "anniversary",
+    "of",
+    "the",
+    "and",
+    "with",
+    "for",
+}
+
+
+def split_dlc_name(name: str) -> tuple[list[str], list[str]]:
+    """Split a DLC base name into game-title tokens and trailing descriptor tokens.
+
+    Handles snake_case, kebab-case, and space-separated descriptors.  Returns
+    ``(base_tokens, descriptor_tokens)``.  If no trailing descriptor is found,
+    returns ``(all_tokens, [])``.
+    """
+    tokens = [t for t in re.split(r"[ _\-]+", name.strip()) if t]
+    if len(tokens) < 2:
+        return tokens, []
+
+    descriptor_tokens: list[str] = []
+    removed_descriptor_word = False
+    while tokens:
+        token_lower = tokens[-1].lower()
+        if token_lower in DLC_DESCRIPTOR_WORDS:
+            descriptor_tokens.insert(0, tokens.pop())
+            removed_descriptor_word = True
+        elif removed_descriptor_word and token_lower in DLC_DESCRIPTOR_QUALIFIERS:
+            descriptor_tokens.insert(0, tokens.pop())
+        else:
+            break
+
+    if not removed_descriptor_word:
+        return [t for t in re.split(r"[ _\-]+", name.strip()) if t], []
+    return tokens, descriptor_tokens
+
 
 def get_log_file_path(filename: str) -> Path:
     """Return a writable log path, preferring Desktop when it exists."""
@@ -483,12 +587,15 @@ def categorize_file(filename: str, folder_path: str | None = None) -> FileType:
             return FileType.DLC
 
     # --- Priority 2: DLC Keywords & Content Descriptors ---
-    # Use global DLC_INDICATORS with word boundary checks for more precise matching
+    # Use global DLC_INDICATORS with word boundary checks for more precise matching.
+    # Boundaries treat underscores and hyphens as separators so snake_case / kebab-case
+    # DLC filenames (e.g. "..._deluxe_edition_bonuses_dlc") are recognized.
     for pattern in DLC_INDICATORS:
-        # Remove the regex prefix/suffix and use word boundary instead
+        # Remove the regex prefix/suffix and use an alphanumeric boundary instead
         clean_pattern = pattern.replace(r"(?i)", "")
         if re.search(
-            rf"\[.*?\b{clean_pattern}\b.*?\]|\b{clean_pattern}\b",
+            rf"\[(?:[^\]]*?(?<![a-zA-Z0-9]){clean_pattern}(?![a-zA-Z0-9])[^\]]*?)\]"
+            rf"|(?<![a-zA-Z0-9]){clean_pattern}(?![a-zA-Z0-9])",
             filename,
             re.IGNORECASE,
         ):
@@ -663,12 +770,14 @@ def smart_title_case(text: str) -> str:
     return restore_roman_numerals(result)
 
 
-def _get_base_name(filename: str) -> str:
+def _get_base_name(filename: str, is_dlc: bool = False) -> str:
     """
     Extract clean base name from filename by removing common tags and patterns.
 
     Args:
         filename: The filename to clean
+        is_dlc: If True, strip trailing DLC descriptor tokens so the same game's
+            DLC files share a single base name.
 
     Returns:
         str: Clean base name without tags and patterns
@@ -728,12 +837,18 @@ def _get_base_name(filename: str) -> str:
         for pattern in patterns:
             name = re.sub(pattern, "", name, flags=re.IGNORECASE)
 
-        # Clean up extra spaces and brackets
-        name = re.sub(r"\s+", " ", name)  # Replace multiple spaces with single space
+        # Clean up extra spaces and brackets, normalizing underscores/hyphens to spaces
+        name = re.sub(r"[\s_\-]+", " ", name)  # Collapse separators to single spaces
         name = re.sub(r"[\[\(\)|\]]", "", name)  # Remove stray brackets
         name = name.strip()
         if not name and leading_game_name:
-            name = leading_game_name
+            name = re.sub(r"[\s_\-]+", " ", leading_game_name).strip()
+
+        # For DLC files, strip trailing descriptors like "deluxe edition bonuses dlc"
+        # so multiple DLCs for the same game share a single base name.
+        if is_dlc:
+            base_tokens, _ = split_dlc_name(name)
+            name = " ".join(base_tokens)
 
         name = restore_roman_numerals(name)
         return name if name else "unknown"
@@ -743,8 +858,14 @@ def _get_base_name(filename: str) -> str:
         return "unknown"
 
 
-def get_clean_base_name(filename: str) -> str:
-    """Gets a clean base name by removing all bracketed/parenthesized content and junk."""
+def get_clean_base_name(filename: str, is_dlc: bool = False) -> str:
+    """Gets a clean base name by removing all bracketed/parenthesized content and junk.
+
+    Args:
+        filename: The filename to clean
+        is_dlc: If True, also strip trailing DLC descriptors so DLC files for the
+            same game share a single folder name.
+    """
     name = os.path.splitext(filename)[0]
     leading_bracket_match = re.match(r"^\[([^\]]+)\]", name)
     if leading_bracket_match:
@@ -758,7 +879,10 @@ def get_clean_base_name(filename: str) -> str:
     name = re.sub(r"\([^)]*\)", "", name)
     name = re.sub(r"(?i)\b(nintendo|switch|rom|base|game|upd|dlc|gme)\b", "", name)
     name = name.replace("®", "").replace("™", "").strip()
-    name = re.sub(r"\s{2,}", " ", name)
+    name = re.sub(r"[\s_\-]+", " ", name)
+    if is_dlc:
+        base_tokens, _ = split_dlc_name(name)
+        name = " ".join(base_tokens)
     return name if name else "Unknown Game"
 
 
@@ -1695,6 +1819,9 @@ class FolderProcessingWorker(BaseWorker):
             if not file_path.exists():
                 continue
             filename = file_path.name
+            # Categorize early so DLC files can share a stripped base name
+            file_type = categorize_file(filename)
+            is_dlc = file_type == FileType.DLC
             # Robust hex ID extraction: 16 or 15 hex chars
             id_match = re.search(r"\[(01[0-9A-Fa-f]{14,16})\]", filename)
             full_id = id_match.group(1) if id_match else None
@@ -1704,7 +1831,7 @@ class FolderProcessingWorker(BaseWorker):
                 group_key = base_id
             else:
                 # Fallback: use cleaned base name as group key
-                group_key = _get_base_name(filename)
+                group_key = _get_base_name(filename, is_dlc=is_dlc)
                 if not group_key or group_key.lower() in (
                     "unknown",
                     "",
@@ -1714,10 +1841,9 @@ class FolderProcessingWorker(BaseWorker):
                 file_to_group_key[file_path] = group_key
 
             # Determine a clean base name from this file
-            current_clean_name = get_clean_base_name(filename)
+            current_clean_name = get_clean_base_name(filename, is_dlc=is_dlc)
 
             # Prefer names from GME/UPD files over DLC files for the folder name
-            file_type = categorize_file(filename)
             is_preferred_source = (
                 file_type == FileType.GAME or file_type == FileType.UPDATE
             )
@@ -2020,40 +2146,51 @@ class FolderProcessingWorker(BaseWorker):
                 file_type_tag = file_type_tag_map.get(file_type, "[GME]")
 
             # 3. Clean the base name: Use the new _get_base_name helper
-            base_name = _get_base_name(filename)  # Use the new helper function here
-            base_name = smart_title_case(base_name)  # Apply smart title casing
+            base_name = _get_base_name(
+                filename
+            )  # normalized, descriptors still present for DLC
 
             # 4. Extract DLC description (if applicable)
             dlc_desc_part = ""
             if file_type == FileType.DLC:
-                # Look for specific DLC content patterns in the original filename
-                dlc_content_regex = "|".join(
-                    [re.escape(p) for p in DLC_CONTENT_PATTERNS]
-                )
-                # This regex tries to capture content within brackets that matches DLC content patterns
-                desc_match = re.search(
-                    rf"\[\s*(.*?({dlc_content_regex}).*?)\s*\]", filename, re.IGNORECASE
-                )
-                if desc_match:
-                    dlc_desc_part = desc_match.group(1).strip()
+                base_tokens, desc_tokens = split_dlc_name(base_name)
+                base_name = " ".join(base_tokens)
+                if desc_tokens:
+                    dlc_desc = " ".join(desc_tokens)
+                    if dlc_desc.lower() not in base_name.lower():
+                        dlc_desc_part = f"- {smart_title_case(dlc_desc)}"
                 else:
-                    # Fallback: find any bracketed content that contains a DLC indicator
-                    bracket_matches = re.findall(r"(\[[^\]]+?\])", filename)
-                    for bracket_content in bracket_matches:
-                        if any(
-                            re.search(
-                                rf"\b{ind.replace(r'(?i)', '')}\b",
-                                bracket_content,
-                                re.IGNORECASE,
-                            )
-                            for ind in DLC_INDICATORS
-                        ):
-                            dlc_desc_part = bracket_content.strip(
-                                "[]"
-                            ).strip()  # Remove outer brackets
-                            break
-                if dlc_desc_part and not dlc_desc_part.startswith("-"):
-                    dlc_desc_part = f"- {dlc_desc_part}"
+                    # Fallback: look for bracketed DLC content patterns
+                    dlc_content_regex = "|".join(
+                        [re.escape(p) for p in DLC_CONTENT_PATTERNS]
+                    )
+                    desc_match = re.search(
+                        rf"\[\s*(.*?({dlc_content_regex}).*?)\s*\]",
+                        filename,
+                        re.IGNORECASE,
+                    )
+                    if desc_match:
+                        dlc_desc_part = desc_match.group(1).strip()
+                    else:
+                        # Fallback: find any bracketed content that contains a DLC indicator
+                        bracket_matches = re.findall(r"(\[[^\]]+?\])", filename)
+                        for bracket_content in bracket_matches:
+                            if any(
+                                re.search(
+                                    rf"\b{ind.replace(r'(?i)', '')}\b",
+                                    bracket_content,
+                                    re.IGNORECASE,
+                                )
+                                for ind in DLC_INDICATORS
+                            ):
+                                dlc_desc_part = bracket_content.strip(
+                                    "[]"
+                                ).strip()  # Remove outer brackets
+                                break
+                    if dlc_desc_part and not dlc_desc_part.startswith("-"):
+                        dlc_desc_part = f"- {dlc_desc_part}"
+
+            base_name = smart_title_case(base_name)  # Apply smart title casing
 
             # 5. Construct the final filename
             final_name_parts = [base_name]
@@ -3611,6 +3748,17 @@ class DragDropWindow(QMainWindow):
                 ).strip()
 
             base_name = sanitize_possessive(base_name) or "Unknown Game"
+
+            # For DLC files, strip trailing descriptors (e.g. "deluxe edition bonuses dlc")
+            # from the base name so the same game's DLCs group together, and keep the
+            # descriptor for the filename.
+            if file_type == FileType.DLC:
+                base_tokens, desc_tokens = split_dlc_name(base_name)
+                base_name = " ".join(base_tokens)
+                if desc_tokens and not dlc_desc:
+                    dlc_desc = re.sub(
+                        r"(?i)\bdlc\b", "DLC", " ".join(desc_tokens).title()
+                    )
 
             # Convert base_name to title case
             base_name = base_name.title()
