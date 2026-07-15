@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import os
+import queue
 from pathlib import Path
 
 import pytest
-
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
 from ryusync import (
     DragDropWindow,
+    FolderProcessingWorker,
     extract_game_id,
     get_base_id,
     merge_folders_by_base_id,
@@ -101,3 +102,38 @@ def test_process_dropped_directory_handles_three_files_without_progress_signal_e
     assert dlc_folder.exists()
     assert len(list(game_folder.glob("*.nsp"))) == 2
     assert len(list(dlc_folder.glob("*.nsp"))) == 1
+
+
+def test_worker_process_folder_logic_groups_snake_case_dlc_together(
+    tmp_path: Path,
+    qapp: QApplication,
+) -> None:
+    """Two snake-case DLC files for the same game should land in one DLC folder."""
+    directory = tmp_path / "drop"
+    directory.mkdir()
+
+    (
+        directory
+        / "V-Final_fantasy_tactics_the_ivalice_chronicles_deluxe_edition_bonuses_dlc.nsp"
+    ).write_text("")
+    (
+        directory
+        / "V-Final_fantasy_tactics_the_ivalice_chronicles_pre_order_bonuses_dlc.nsp"
+    ).write_text("")
+
+    q: queue.Queue = queue.Queue()
+    worker = FolderProcessingWorker(q)
+    summary = worker.process_folder_logic(directory)
+
+    assert "Successfully processed 2 files." in summary
+
+    game_folders = [
+        path
+        for path in directory.iterdir()
+        if path.is_dir() and not path.name.startswith("_")
+    ]
+    assert len(game_folders) == 1
+
+    dlc_folder = game_folders[0] / "DLC"
+    assert dlc_folder.exists()
+    assert len(list(dlc_folder.glob("*.nsp"))) == 2

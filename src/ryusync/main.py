@@ -2771,8 +2771,9 @@ class DragDropWindow(QMainWindow):
 
         for file_path in scanned_files:
             file_type = categorize_file(file_path.name, str(file_path.parent))
+            is_dlc = file_type == FileType.DLC
             renamed_file = self.apply_renaming_rules(file_path.name)
-            base_name = get_clean_base_name(file_path.name)
+            base_name = get_clean_base_name(file_path.name, is_dlc=is_dlc)
             folder_name = smart_title_case(
                 restore_roman_numerals(self.game_organizer.sanitize_filename(base_name))
             )
@@ -3397,13 +3398,14 @@ class DragDropWindow(QMainWindow):
                         )
                     continue
 
+                # Categorize before cleaning so DLC descriptors can be stripped
+                file_type = categorize_file(filename)
+                is_dlc = file_type == FileType.DLC
+
                 # Determine a clean base name from this file
-                current_clean_name = get_clean_base_name(filename)
+                current_clean_name = get_clean_base_name(filename, is_dlc=is_dlc)
 
                 # Prefer names from GME/UPD files over DLC files for the folder name
-                file_type = categorize_file(
-                    filename
-                )  # Use original name for categorization
                 is_preferred_source = (
                     file_type == FileType.GAME or file_type == FileType.UPDATE
                 )
