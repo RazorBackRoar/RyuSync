@@ -1,7 +1,7 @@
 # RyuSync AGENTS
 
-**Package:** `ryusync`  
-**Version:** 1.0.0  
+**Package:** `ryusync`
+**Version:** 1.0.2
 **GitHub:** `RazorBackRoar/RyuSync`
 
 Use with `../AGENTS.md`. Keep this file RyuSync-specific.
