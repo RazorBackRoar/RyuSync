@@ -25,7 +25,7 @@ Dev clones expect sibling `../.razorcore` (editable `razorcore>=1.211.0`). Archi
 ## razorcore integration (v1.1)
 
 | Surface | Usage |
-|---------|--------|
+| --- | --- |
 | `logging` / `config.get_version` | Logging + version |
 | `appinfo` / `updates` | Startup banner, About, update check |
 | `threading.BaseWorker` | `FolderProcessingWorker` — domain `progress(str,int,int)` kept; `stop()` → `request_cancel()` |
