@@ -38,6 +38,8 @@ Switch-specific filename/path sanitizers stay local (domain logic).
 - Bundled entry must use **absolute** imports (`from ryusync.app_resources import …`). Relative imports crash PyInstaller/DMG launches.
 - Resolve bundled assets via `ryusync.app_resources.get_resource_path`.
 - Preserve Dry Mode semantics (preview without moving) and `[GME]` / `[UPD]` / `[DLC]` tagging.
+- `_get_base_name` must not truncate titles that merely *contain* version keywords as substrings (e.g. Everhood, Silverhood, Patchwork, F1 2023). Regression coverage: `tests/test_nsp_naming.py`.
+- `GameOrganizer` / `FolderProcessingWorker` accept a `dry_run` keyword — keep the signature stable for preview flows.
 - Packaging notes: `docs/DMG_BUILD_README.md`.
 
 ## Verification
@@ -47,6 +49,8 @@ uv run ruff check .
 uv run ty check src --python-version 3.14
 uv run pytest tests/ -q
 ```
+
+Focused: `tests/test_nsp_naming.py`, `tests/test_archive_extraction.py`, `tests/test_categorization.py`, `tests/test_processing.py`.
 
 ## CI limitations
 
