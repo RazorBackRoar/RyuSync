@@ -1868,7 +1868,7 @@ class FolderProcessingWorker(BaseWorker):
         logging.info("Second pass: Creating folders and moving files...")
         processed_files_count = 0
         folder_path_by_name: dict[str, Path] = {}
-        # Process base games/updates first so DLCs can fuzzy-match to existing folders
+        # Process base games/updates first so DLCs reuse the same group folder
         sorted_files = sorted(
             all_files_at_root,
             key=lambda p: (
@@ -1911,13 +1911,10 @@ class FolderProcessingWorker(BaseWorker):
                     if not new_path.exists():
                         safe_rename(game_folder, new_path, allowed_roots)
                         game_folder = new_path
+            elif group_key in group_key_to_folder:
+                game_folder = group_key_to_folder[group_key]
             elif canonical_folder_name in folder_path_by_name:
                 game_folder = folder_path_by_name[canonical_folder_name]
-            elif match_name := self.game_organizer.fuzzy_match(
-                canonical_folder_name, list(folder_path_by_name.keys())
-            ):
-                game_folder = folder_path_by_name[match_name]
-                canonical_folder_name = match_name
             else:
                 game_folder = directory / canonical_folder_name
                 safe_mkdir(game_folder, allowed_roots, exist_ok=True)

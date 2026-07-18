@@ -131,3 +131,31 @@ def test_worker_process_folder_logic_groups_snake_case_dlc_together(
     dlc_folder = game_folders[0] / "DLC"
     assert dlc_folder.exists()
     assert len(list(dlc_folder.glob("*.nsp"))) == 2
+
+
+def test_worker_does_not_fuzzy_merge_different_games(
+    tmp_path: Path,
+    qapp: QApplication,
+) -> None:
+    """Similar game names must not share a folder when Title IDs differ."""
+    directory = tmp_path / "drop"
+    directory.mkdir()
+
+    (directory / "Super Mario Odyssey [01008B000936C000].nsp").write_text("odyssey")
+    (directory / "Super Mario 3D World [010028600EBDA800].nsp").write_text("3dworld")
+
+    q: queue.Queue = queue.Queue()
+    worker = FolderProcessingWorker(q)
+    summary = worker.process_folder_logic(directory)
+
+    assert "Successfully processed 2 files." in summary
+
+    game_folders = [
+        path
+        for path in directory.iterdir()
+        if path.is_dir() and not path.name.startswith("_")
+    ]
+    assert len(game_folders) == 2
+    folder_names = {path.name for path in game_folders}
+    assert "Super Mario Odyssey" in folder_names
+    assert "Super Mario 3D World" in folder_names
