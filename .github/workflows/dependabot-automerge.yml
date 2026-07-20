@@ -34,5 +34,12 @@ jobs:
             echo "Skipping non-Dependabot PR #${pr_number}."
             exit 0
           fi
+          merge_state=$(gh pr view "${pr_number}" --repo "${REPOSITORY}" --json mergeStateStatus -q '.mergeStateStatus')
+          if [ "${merge_state}" = "BEHIND" ]; then
+            echo "PR #${pr_number} is behind base; updating branch before merge."
+            gh pr update-branch "${pr_number}" --repo "${REPOSITORY}"
+            echo "Branch updated; CI will re-run and trigger auto-merge again."
+            exit 0
+          fi
           gh pr merge "${pr_number}" --repo "${REPOSITORY}" --squash
           echo "Merged PR #${pr_number}."
