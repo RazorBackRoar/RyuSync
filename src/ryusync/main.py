@@ -590,21 +590,27 @@ def categorize_file(filename: str, folder_path: str | None = None) -> FileType:
     # Use global DLC_INDICATORS with word boundary checks for more precise matching.
     # Boundaries treat underscores and hyphens as separators so snake_case / kebab-case
     # DLC filenames (e.g. "..._deluxe_edition_bonuses_dlc") are recognized.
-    for pattern in DLC_INDICATORS:
-        # Remove the regex prefix/suffix and use an alphanumeric boundary instead
-        clean_pattern = pattern.replace(r"(?i)", "")
-        if re.search(
-            rf"\[(?:[^\]]*?(?<![a-zA-Z0-9]){clean_pattern}(?![a-zA-Z0-9])[^\]]*?)\]"
-            rf"|(?<![a-zA-Z0-9]){clean_pattern}(?![a-zA-Z0-9])",
-            filename,
-            re.IGNORECASE,
-        ):
-            return FileType.DLC
+    # A base-game title ID (...000) outranks keyword hits like "_pack_" or
+    # "_character_" in the display name.
+    has_base_game_title_id = bool(
+        re.search(r"\[01[0-9A-Fa-f]{11}000\]", filename, re.IGNORECASE)
+    )
+    if not has_base_game_title_id:
+        for pattern in DLC_INDICATORS:
+            # Remove the regex prefix/suffix and use an alphanumeric boundary instead
+            clean_pattern = pattern.replace(r"(?i)", "")
+            if re.search(
+                rf"\[(?:[^\]]*?(?<![a-zA-Z0-9]){clean_pattern}(?![a-zA-Z0-9])[^\]]*?)\]"
+                rf"|(?<![a-zA-Z0-9]){clean_pattern}(?![a-zA-Z0-9])",
+                filename,
+                re.IGNORECASE,
+            ):
+                return FileType.DLC
 
-    # Content descriptors with more precise patterns
-    dlc_content_regex = "|".join([re.escape(p) for p in DLC_CONTENT_PATTERNS])
-    if re.search(rf"\[.*?({dlc_content_regex}).*?\]", filename, re.IGNORECASE):
-        return FileType.DLC
+        # Content descriptors with more precise patterns
+        dlc_content_regex = "|".join([re.escape(p) for p in DLC_CONTENT_PATTERNS])
+        if re.search(rf"\[.*?({dlc_content_regex}).*?\]", filename, re.IGNORECASE):
+            return FileType.DLC
 
     # Folder context
     if folder_path and "DLC" in upper_folder:

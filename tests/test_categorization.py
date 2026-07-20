@@ -52,6 +52,15 @@ from ryusync import FileType, categorize_file
             FileType.DLC,
         ),
         ("Game-Pre-Order-Bonus.nsp", FileType.DLC),
+        # Base-game title ID wins over DLC keywords in the display name.
+        (
+            "Starter_Pack_Collection [0100ABCDEF120000][GME].nsp",
+            FileType.GAME,
+        ),
+        (
+            "Jump_Force_Character_Pack [0100ABCDEF120000][GME].nsp",
+            FileType.GAME,
+        ),
     ],
 )
 def test_categorize_file_uses_title_id_suffix(
