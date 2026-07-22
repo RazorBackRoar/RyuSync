@@ -1,29 +1,23 @@
 # RyuSync
 
+[![Download](https://img.shields.io/github/v/release/RazorBackRoar/RyuSync?style=for-the-badge&label=Download%20DMG&color=d32f2f)](https://github.com/RazorBackRoar/RyuSync/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/RazorBackRoar/RyuSync/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/RazorBackRoar/RyuSync/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-1.0.2-blue?style=for-the-badge)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blueviolet?style=for-the-badge)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.14-2ea44f?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![PySide6](https://img.shields.io/badge/PySide6-Qt6-41cd52?style=for-the-badge&logo=qt&logoColor=white)](https://doc.qt.io/qtforpython/)
 [![macOS](https://img.shields.io/badge/mac%20os-Apple%20Silicon-d32f2f?style=for-the-badge&logo=apple&logoColor=white)](https://support.apple.com/en-us/HT211814)
 
-<!-- Workspace Health Layer -->
-[![Status](https://img.shields.io/badge/status-active-2ea44f?style=for-the-badge)]()
-[![Tests](https://img.shields.io/badge/tests-present-2ea44f?style=for-the-badge)]()
-[![Lint](https://img.shields.io/badge/lint-ruff-2ea44f?style=for-the-badge)]()
+**Native macOS drag-and-drop organizer for Nintendo Switch `.nsp` / `.xci` files.**
 
-```text
-██████╗ ██╗   ██╗██╗   ██╗███████╗██╗   ██╗███╗   ██╗ ██████╗
-██╔══██╗██║   ██║██║   ██║██╔════╝╚██╗ ██╔╝████╗  ██║██╔════╝
-██████╔╝██║   ██║██║   ██║███████╗ ╚████╔╝ ██╔██╗ ██║██║
-██╔══██╗██║   ██║██║   ██║╚════██║  ╚██╔╝  ██║╚██╗██║██║
-██║  ██║╚██████╔╝╚██████╔╝███████║   ██║   ██║ ╚████║╚██████╗
-╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝   ╚═╝  ╚═══╝ ╚═════╝
-```
+Cleans titles, tags content as `[GME]`, `[UPD]`, or `[DLC]`, extracts archives in place, and supports a read-only Dry Mode preview before anything moves.
 
-> **TL;DR:** Native macOS drag-and-drop organizer for Nintendo Switch `.nsp` / `.xci` files. Cleans titles, tags content as `[GME]`, `[UPD]`, or `[DLC]`, extracts archives in place, and supports a read-only Dry Mode preview before anything moves. Dark native UI with red/blue RazorBackRoar accents.
+<p align="center">
+  <a href="https://github.com/RazorBackRoar/RyuSync/releases/latest/download/RyuSync.dmg"><strong>↓ Download RyuSync.dmg</strong></a>
+  ·
+  <a href="https://github.com/RazorBackRoar/RyuSync/releases">All releases</a>
+</p>
 
----
+![RyuSync](docs/screenshots/app.png)
 
 ## Features
 
@@ -38,9 +32,9 @@
 
 ---
 
-## Installation
+## Install
 
-1. Download the latest `RyuSync.dmg` from [Releases](https://github.com/RazorBackRoar/RyuSync/releases)
+1. Download [`RyuSync.dmg`](https://github.com/RazorBackRoar/RyuSync/releases/latest/download/RyuSync.dmg)
 2. Open the DMG and drag `RyuSync.app` to `/Applications`
 3. First launch — right-click the app → **Open** to bypass Gatekeeper on the ad-hoc signed build
 4. Install `unar` for archive extraction: `brew install unar`
