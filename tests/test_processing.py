@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import queue
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -16,6 +17,7 @@ from ryusync import (
     get_base_id,
     merge_folders_by_base_id,
     standardize_filenames_to_folder,
+    remove_versions_from_path,
 )
 
 
@@ -131,3 +133,85 @@ def test_worker_process_folder_logic_groups_snake_case_dlc_together(
     dlc_folder = game_folders[0] / "DLC"
     assert dlc_folder.exists()
     assert len(list(dlc_folder.glob("*.nsp"))) == 2
+
+
+@patch.object(Path, "rename")
+@patch.object(Path, "exists", return_value=True)
+def test_remove_versions_from_path_removes_bracket_versions(
+    mock_exists, mock_rename
+) -> None:
+    mock_rename.side_effect = lambda x: x
+    file_path = Path("My Game [v131072].nsp")
+
+    new_path = remove_versions_from_path(file_path)
+
+    assert new_path.name == "My Game.nsp"
+    mock_rename.assert_called_once_with(Path("My Game.nsp"))
+
+
+@patch.object(Path, "rename")
+@patch.object(Path, "exists", return_value=True)
+def test_remove_versions_from_path_removes_parenthesis_versions(
+    mock_exists, mock_rename
+) -> None:
+    mock_rename.side_effect = lambda x: x
+    file_path = Path("My Game (v0).nsp")
+
+    new_path = remove_versions_from_path(file_path)
+
+    assert new_path.name == "My Game.nsp"
+    mock_rename.assert_called_once_with(Path("My Game.nsp"))
+
+
+@patch.object(Path, "rename")
+@patch.object(Path, "exists", return_value=True)
+def test_remove_versions_from_path_ignores_paths_without_versions(
+    mock_exists, mock_rename
+) -> None:
+    file_path = Path("My Game.nsp")
+
+    new_path = remove_versions_from_path(file_path)
+
+    assert new_path.name == "My Game.nsp"
+    mock_rename.assert_not_called()
+
+
+@patch.object(Path, "rename")
+@patch.object(Path, "exists", return_value=False)
+def test_remove_versions_from_path_handles_non_existent_path(
+    mock_exists, mock_rename
+) -> None:
+    file_path = Path("Non Existent Game [v123].nsp")
+
+    new_path = remove_versions_from_path(file_path)
+
+    assert new_path == file_path
+    mock_rename.assert_not_called()
+
+
+@patch.object(Path, "rename")
+@patch.object(Path, "exists", return_value=True)
+def test_remove_versions_from_path_handles_multiple_versions(
+    mock_exists, mock_rename
+) -> None:
+    mock_rename.side_effect = lambda x: x
+    file_path = Path("My Game [v1] (v2).nsp")
+
+    new_path = remove_versions_from_path(file_path)
+
+    assert new_path.name == "My Game.nsp"
+    mock_rename.assert_called_once_with(Path("My Game.nsp"))
+
+
+@patch.object(Path, "rename")
+@patch.object(Path, "exists", return_value=True)
+def test_remove_versions_from_path_cleans_extra_spaces(
+    mock_exists, mock_rename
+) -> None:
+    mock_rename.side_effect = lambda x: x
+    file_path = Path("My Game   [v1]   Extra.nsp")
+
+    new_path = remove_versions_from_path(file_path)
+
+    assert new_path.name == "My Game Extra.nsp"
+    mock_rename.assert_called_once_with(Path("My Game Extra.nsp"))
