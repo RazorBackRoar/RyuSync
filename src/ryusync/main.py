@@ -1218,9 +1218,7 @@ def should_clean_file(file_path: Path) -> bool:
         "icon\r",
         "icon\015",
     }
-    if name_lower in unwanted_filenames or name_lower.startswith("icon"):
-        return True
-    return False
+    return name_lower in unwanted_filenames or name_lower.startswith("icon")
 
 
 def is_path_safe(path: Path, allowed_roots: list[Path]) -> bool:
