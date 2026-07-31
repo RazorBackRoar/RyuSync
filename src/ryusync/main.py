@@ -5542,62 +5542,8 @@ def fix_folder_structure(directory: Path) -> None:
         # Fix nested DLC folders
         dlc_folder = game_folder / "DLC"
         if dlc_folder.exists() and dlc_folder.is_dir():
-            nested_dlc = dlc_folder / "DLC"
-            if nested_dlc.exists() and nested_dlc.is_dir():
-                logging.info(
-                    f"Found nested DLC folder in {game_folder.name}, fixing..."
-                )
-
-                # Move all files from nested DLC folder to parent DLC folder
-                for nested_file in nested_dlc.rglob("*"):
-                    if not nested_file.is_file():
-                        continue
-
-                    # Determine relative path to nested_dlc
-                    rel_path = nested_file.relative_to(nested_dlc)
-
-                    # If it's in a subfolder, we just want the filename
-                    if len(rel_path.parts) > 1:
-                        target_path = dlc_folder / rel_path.name
-                    else:
-                        target_path = dlc_folder / rel_path
-
-                    # Handle name conflicts
-                    counter = 1
-                    while target_path.exists():
-                        name, ext = os.path.splitext(nested_file.name)
-                        target_path = dlc_folder / f"{name}_{counter}{ext}"
-                        counter += 1
-
-                    try:
-                        shutil.move(str(nested_file), str(target_path))
-                        logging.info(
-                            f"Moved file from nested DLC: {nested_file.name} → {target_path}"
-                        )
-                    except Exception as e:
-                        logging.error(f"Error moving file from nested DLC: {e}")
-
-                # Remove all empty directories under nested_dlc
-                for subdir in list(nested_dlc.rglob("*"))[
-                    ::-1
-                ]:  # Process deepest dirs first
-                    if subdir.is_dir():
-                        try:
-                            subdir.rmdir()  # Will only remove if empty
-                            logging.info(f"Removed empty directory: {subdir}")
-                        except Exception:
-                            pass  # Not empty or other error
-
-                # Finally remove the nested DLC folder itself
-                try:
-                    nested_dlc.rmdir()
-                    logging.info(f"Removed empty nested DLC folder: {nested_dlc}")
-                except Exception as e:
-                    logging.error(f"Could not remove nested DLC folder: {e}")
-
-            # Fix any DLC subfolders in the DLC folder (shouldn't be any)
             for subfolder in dlc_folder.iterdir():
-                if subfolder.is_dir() and subfolder.name != "DLC":
+                if subfolder.is_dir():
                     # Move all files from subfolders directly to DLC folder
                     for file_path in subfolder.rglob("*"):
                         if not file_path.is_file():
