@@ -14,7 +14,7 @@ from ryusync.main import sanitize_filename, GameOrganizer
         ("The Legend of Zelda", None, "The Legend of Zelda"),
         # Invalid characters removal
         ('Game<>:"|?*Name.nsp', None, "Game_______name.nsp"),
-        ("Game/Name.nsp", None, "Game_name.nsp"),
+        ("Game/Name.nsp", None, "Name.nsp"),
         ("Game\\Name.nsp", None, "Game_name.nsp"),
         # Hex IDs removal
         ("Zelda [0100000000000000].nsp", None, "Zelda.nsp"),
