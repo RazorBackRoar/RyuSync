@@ -1813,12 +1813,12 @@ class FolderProcessingWorker(BaseWorker):
         logging.info(
             "Processing and organizing files by Title ID or fallback base name"
         )
-        group_key_to_folder: dict[
-            str, Path
-        ] = {}  # Maps group key (base_id or clean name) to folder Path
-        group_key_to_best_name: dict[
-            str, str
-        ] = {}  # Maps group key to preferred folder name
+        group_key_to_folder: dict[str, Path] = (
+            {}
+        )  # Maps group key (base_id or clean name) to folder Path
+        group_key_to_best_name: dict[str, str] = (
+            {}
+        )  # Maps group key to preferred folder name
         file_to_group_key: dict[Path, str] = {}
 
         # First pass: Identify grouping keys and best names
@@ -2308,8 +2308,7 @@ class DragDropWindow(QMainWindow):
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(22, 20, 22, 20)
         main_layout.setSpacing(14)
-        central_widget.setStyleSheet(
-            """
+        central_widget.setStyleSheet("""
             QWidget#appRoot {
                 background: #0a0a0f;
                 color: #e0e6ed;
@@ -2435,8 +2434,7 @@ class DragDropWindow(QMainWindow):
                 padding: 16px;
                 selection-background-color: #00d0ff;
             }
-            """
-        )
+            """)
 
         header = QFrame()
         header.setObjectName("headerPanel")
@@ -3391,12 +3389,12 @@ class DragDropWindow(QMainWindow):
 
             # Step 4: Process and organize files based on Title ID
             logging.info("Processing and organizing files by Title ID")
-            game_id_to_folder_path: dict[
-                str, Path
-            ] = {}  # Maps base_id to canonical folder Path
-            game_id_to_best_name: dict[
-                str, str
-            ] = {}  # Maps base_id to preferred folder name
+            game_id_to_folder_path: dict[str, Path] = (
+                {}
+            )  # Maps base_id to canonical folder Path
+            game_id_to_best_name: dict[str, str] = (
+                {}
+            )  # Maps base_id to preferred folder name
             total_files = len(all_files_at_root)
 
             # First pass: Identify base IDs and best names
@@ -4865,10 +4863,7 @@ class GameOrganizer:
         normalized = re.sub(
             r"^\s*the\s+|\s+the\s*$", " ", normalized, flags=re.IGNORECASE
         ).strip()
-        normalized = re.sub(
-            r"\b(and|&|or|vs|versus)\b", "", normalized, flags=re.IGNORECASE
-        )
-        return normalized
+        return re.sub(r"\b(and|&|or|vs|versus)\b", "", normalized, flags=re.IGNORECASE)
 
     def fuzzy_match(self, target: str, candidates: list[str]) -> str | None:
         """Enhanced fuzzy matching with better abbreviation handling and lower threshold."""
