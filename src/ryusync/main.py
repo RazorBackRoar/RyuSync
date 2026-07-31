@@ -375,11 +375,11 @@ def sanitize_possessive(text: str) -> str:
         return text
 
     # Handle "'s" possessive form
-    if text.endswith("'s") or text.endswith("'s"):
+    if text.endswith("'s") or text.endswith("’s"):
         return text[:-2]
 
     # Handle plural possessives ending with just "s'"
-    if text.endswith("s'"):
+    if text.endswith("s'") or text.endswith("s’"):
         return text[:-1]
 
     return text
