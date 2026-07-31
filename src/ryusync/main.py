@@ -529,32 +529,20 @@ def add_file(filename: str, file_type: str, category: str) -> None:
     try:
         global nsp_games, nsp_upds, nsp_dlcs, xci_games, xci_upds, xci_dlcs
 
-        if file_type == "nsp":
-            if category == "game":
-                if filename not in nsp_games:
-                    nsp_games.append(filename)
-                    logging.debug(f"Added NSP game: {filename}")
-            elif category == "update":
-                if filename not in nsp_upds:
-                    nsp_upds.append(filename)
-                    logging.debug(f"Added NSP update: {filename}")
-            elif category == "dlc":
-                if filename not in nsp_dlcs:
-                    nsp_dlcs.append(filename)
-                    logging.debug(f"Added NSP DLC: {filename}")
-        elif file_type == "xci":
-            if category == "game":
-                if filename not in xci_games:
-                    xci_games.append(filename)
-                    logging.debug(f"Added XCI game: {filename}")
-            elif category == "update":
-                if filename not in xci_upds:
-                    xci_upds.append(filename)
-                    logging.debug(f"Added XCI update: {filename}")
-            elif category == "dlc":
-                if filename not in xci_dlcs:
-                    xci_dlcs.append(filename)
-                    logging.debug(f"Added XCI DLC: {filename}")
+        mapping = {
+            ("nsp", "game"): (nsp_games, "NSP game"),
+            ("nsp", "update"): (nsp_upds, "NSP update"),
+            ("nsp", "dlc"): (nsp_dlcs, "NSP DLC"),
+            ("xci", "game"): (xci_games, "XCI game"),
+            ("xci", "update"): (xci_upds, "XCI update"),
+            ("xci", "dlc"): (xci_dlcs, "XCI DLC"),
+        }
+
+        if (file_type, category) in mapping:
+            target_list, log_name = mapping[(file_type, category)]
+            if filename not in target_list:
+                target_list.append(filename)
+                logging.debug(f"Added {log_name}: {filename}")
     except Exception as e:
         logging.error(f"Failed to add file {filename}: {e}")
 
