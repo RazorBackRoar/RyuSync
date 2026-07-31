@@ -1216,7 +1216,6 @@ def should_clean_file(file_path: Path) -> bool:
         "thumbs.db",
         ".ds_store",
         "icon\r",
-        "icon\015",
     }
     if name_lower in unwanted_filenames or name_lower.startswith("icon"):
         return True
