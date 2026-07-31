@@ -2009,51 +2009,43 @@ class FolderProcessingWorker(BaseWorker):
                 failed_files.append(filename)
 
         # Generate summary text and collect file counts
-        nsp_game_count = sum(
-            1 for f in directory.glob("**/*.nsp") if "[GME]" in f.name.upper()
-        )
-        nsp_upd_count = sum(
-            1 for f in directory.glob("**/*.nsp") if "[UPD]" in f.name.upper()
-        )
-        nsp_dlc_count = sum(
-            1 for f in directory.glob("**/*.nsp") if "[DLC]" in f.name.upper()
-        )
-        xci_game_count = sum(
-            1 for f in directory.glob("**/*.xci") if "[GME]" in f.name.upper()
-        )
-        xci_upd_count = sum(
-            1 for f in directory.glob("**/*.xci") if "[UPD]" in f.name.upper()
-        )
-        xci_dlc_count = sum(
-            1 for f in directory.glob("**/*.xci") if "[DLC]" in f.name.upper()
-        )
+        file_counts_dict = {
+            "nsp_games": [],
+            "nsp_updates": [],
+            "nsp_dlcs": [],
+            "xci_games": [],
+            "xci_updates": [],
+            "xci_dlcs": [],
+        }
+
+        for f in directory.rglob("*"):
+            name_upper = f.name.upper()
+            if name_upper.endswith(".NSP"):
+                if "[GME]" in name_upper:
+                    file_counts_dict["nsp_games"].append(str(f))
+                elif "[UPD]" in name_upper:
+                    file_counts_dict["nsp_updates"].append(str(f))
+                elif "[DLC]" in name_upper:
+                    file_counts_dict["nsp_dlcs"].append(str(f))
+            elif name_upper.endswith(".XCI"):
+                if "[GME]" in name_upper:
+                    file_counts_dict["xci_games"].append(str(f))
+                elif "[UPD]" in name_upper:
+                    file_counts_dict["xci_updates"].append(str(f))
+                elif "[DLC]" in name_upper:
+                    file_counts_dict["xci_dlcs"].append(str(f))
+
+        nsp_game_count = len(file_counts_dict["nsp_games"])
+        nsp_upd_count = len(file_counts_dict["nsp_updates"])
+        nsp_dlc_count = len(file_counts_dict["nsp_dlcs"])
+        xci_game_count = len(file_counts_dict["xci_games"])
+        xci_upd_count = len(file_counts_dict["xci_updates"])
+        xci_dlc_count = len(file_counts_dict["xci_dlcs"])
 
         total_games = nsp_game_count + xci_game_count
         total_updates = nsp_upd_count + xci_upd_count
         total_dlcs = nsp_dlc_count + xci_dlc_count
         total_files = total_games + total_updates + total_dlcs
-
-        # Collect file paths for each category to emit back to main thread
-        file_counts_dict = {
-            "nsp_games": [
-                str(f) for f in directory.glob("**/*.nsp") if "[GME]" in f.name.upper()
-            ],
-            "nsp_updates": [
-                str(f) for f in directory.glob("**/*.nsp") if "[UPD]" in f.name.upper()
-            ],
-            "nsp_dlcs": [
-                str(f) for f in directory.glob("**/*.nsp") if "[DLC]" in f.name.upper()
-            ],
-            "xci_games": [
-                str(f) for f in directory.glob("**/*.xci") if "[GME]" in f.name.upper()
-            ],
-            "xci_updates": [
-                str(f) for f in directory.glob("**/*.xci") if "[UPD]" in f.name.upper()
-            ],
-            "xci_dlcs": [
-                str(f) for f in directory.glob("**/*.xci") if "[DLC]" in f.name.upper()
-            ],
-        }
 
         # Emit file counts to be processed in the main thread
         self.file_counts.emit(file_counts_dict)
