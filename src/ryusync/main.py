@@ -789,7 +789,7 @@ def _get_base_name(filename: str, is_dlc: bool = False) -> str:
     """
     try:
         # Remove file extension
-        name = os.path.splitext(filename)[0]
+        name = Path(filename).stem
         leading_bracket_match = re.match(r"^\[([^\]]+)\]", name)
         leading_game_name = ""
         if leading_bracket_match:
@@ -873,7 +873,7 @@ def get_clean_base_name(filename: str, is_dlc: bool = False) -> str:
         is_dlc: If True, also strip trailing DLC descriptors so DLC files for the
             same game share a single folder name.
     """
-    name = os.path.splitext(filename)[0]
+    name = Path(filename).stem
     leading_bracket_match = re.match(r"^\[([^\]]+)\]", name)
     if leading_bracket_match:
         leading_value = leading_bracket_match.group(1).strip()
@@ -915,7 +915,7 @@ def sanitize_path_component(
     normalized = re.sub(r"\s+", " ", normalized).strip()
 
     if preserve_extension:
-        stem, extension = os.path.splitext(normalized)
+        stem, extension = Path(normalized).stem, Path(normalized).suffix
     else:
         stem, extension = normalized, ""
 
@@ -1007,8 +1007,8 @@ def sanitize_filename(filename: str, folder_path: str | None = None) -> str:
     """
     try:
         # Get original extension (only relevant if it's a file)
-        original_ext = os.path.splitext(filename)[1].lower()
-        name_without_ext = os.path.splitext(filename)[0]
+        original_ext = Path(filename).suffix.lower()
+        name_without_ext = Path(filename).stem
 
         # Sanitize by removing invalid characters
         invalid_chars = '<>:"/\\|?*'
@@ -1065,7 +1065,7 @@ def sanitize_filename(filename: str, folder_path: str | None = None) -> str:
 
         # If the cleaned name is too short, use the folder name as a fallback
         if len(clean_base_name) < 3 and folder_path:
-            folder_name_fallback = os.path.basename(os.path.normpath(folder_path))
+            folder_name_fallback = Path(folder_path).name
             # Clean the fallback folder name too
             folder_name_fallback = re.sub(r"\[.*?\]|\(.*?\)", "", folder_name_fallback)
             folder_name_fallback = re.sub(
@@ -1097,7 +1097,7 @@ def sanitize_filename(filename: str, folder_path: str | None = None) -> str:
     except Exception as e:
         logging.error(f"Error sanitizing filename/folder name '{filename}': {e}")
         return sanitize_path_component(
-            f"unknown{os.path.splitext(filename)[1].lower() or ''}",
+            f"unknown{Path(filename).suffix.lower() or ''}",
             default="unknown",
             preserve_extension=True,
         )
@@ -1132,7 +1132,7 @@ def remove_versions_from_path(path: Path) -> Path:
 
 def scan_directory(directory: str) -> None:
     """Scan directory recursively and track all NSP/XCI files"""
-    if not directory or not os.path.isdir(directory):
+    if not directory or not Path(directory).is_dir():
         logging.error(f"Invalid directory: {directory}")
         return
 
@@ -1367,7 +1367,7 @@ def find_unar() -> str | None:
         "/opt/local/bin/unar",
     ]
     for candidate in candidates:
-        if candidate and os.path.exists(candidate) and os.access(candidate, os.X_OK):
+        if candidate and Path(candidate).exists() and os.access(candidate, os.X_OK):
             return candidate
     return None
 
@@ -1488,7 +1488,7 @@ def merge_folders_by_base_id(parent_dir: Path) -> None:
                     target = primary / item.name
                     counter = 1
                     while target.exists():
-                        name, ext = os.path.splitext(item.name)
+                        name, ext = item.stem, item.suffix
                         target = primary / f"{name}_merged_{counter}{ext}"
                         counter += 1
                     try:
@@ -1782,7 +1782,7 @@ class FolderProcessingWorker(BaseWorker):
                     counter = 1
                     original_target_name = target_path.name
                     while target_path.exists():
-                        name, ext = os.path.splitext(original_target_name)
+                        name, ext = Path(original_target_name).stem, Path(original_target_name).suffix
                         target_path = directory / f"{name}_{counter}{ext}"
                         counter += 1
 
@@ -1969,7 +1969,7 @@ class FolderProcessingWorker(BaseWorker):
                             logging.warning(
                                 f"Different file with same name exists at {final_target_path.relative_to(directory)}. Appending _{counter}."
                             )
-                            name, ext = os.path.splitext(original_target_name)
+                            name, ext = Path(original_target_name).stem, Path(original_target_name).suffix
                             final_target_path = (
                                 final_target_path.parent / f"{name}_{counter}{ext}"
                             )
@@ -1978,7 +1978,7 @@ class FolderProcessingWorker(BaseWorker):
                         logging.error(
                             f"Error comparing file {filename} with {final_target_path}: {cmp_error}. Attempting rename."
                         )
-                        name, ext = os.path.splitext(original_target_name)
+                        name, ext = Path(original_target_name).stem, Path(original_target_name).suffix
                         final_target_path = (
                             final_target_path.parent / f"{name}_{counter}{ext}"
                         )
@@ -1987,7 +1987,7 @@ class FolderProcessingWorker(BaseWorker):
                         logging.error(
                             f"Unexpected error during file comparison for {filename}: {e}. Attempting rename."
                         )
-                        name, ext = os.path.splitext(original_target_name)
+                        name, ext = Path(original_target_name).stem, Path(original_target_name).suffix
                         final_target_path = (
                             final_target_path.parent / f"{name}_{counter}{ext}"
                         )
@@ -2123,7 +2123,7 @@ class FolderProcessingWorker(BaseWorker):
                     counter = 1
                     # Handle conflicts when moving back
                     while target_path.exists():
-                        name, ext = os.path.splitext(item.name)
+                        name, ext = item.stem, item.suffix
                         target_path = original_parent / f"{name}_{counter}{ext}"
                         counter += 1
                     safe_move(item, target_path, allowed_roots)
@@ -2148,8 +2148,8 @@ class FolderProcessingWorker(BaseWorker):
         into their final game folders.
         """
         try:
-            original_ext = os.path.splitext(filename)[1].lower()
-            name_part_no_ext = os.path.splitext(filename)[0]
+            original_ext = Path(filename).suffix.lower()
+            name_part_no_ext = Path(filename).stem
 
             # 1. Extract Hex ID (must be done first and preserved)
             hex_id_match = re.search(
@@ -3366,7 +3366,7 @@ class DragDropWindow(QMainWindow):
                         counter = 1
                         original_target_name = target_path.name
                         while target_path.exists():
-                            name, ext = os.path.splitext(original_target_name)
+                            name, ext = Path(original_target_name).stem, Path(original_target_name).suffix
                             target_path = directory / f"{name}_{counter}{ext}"
                             counter += 1
 
@@ -3519,7 +3519,7 @@ class DragDropWindow(QMainWindow):
                                 logging.warning(
                                     f"Different file with same name exists at {final_target_path.relative_to(directory)}. Appending _{counter}."
                                 )
-                                name, ext = os.path.splitext(original_target_name)
+                                name, ext = Path(original_target_name).stem, Path(original_target_name).suffix
                                 final_target_path = (
                                     final_target_path.parent / f"{name}_{counter}{ext}"
                                 )
@@ -3528,7 +3528,7 @@ class DragDropWindow(QMainWindow):
                             logging.error(
                                 f"Error comparing file {filename} with {final_target_path}: {cmp_error}. Attempting rename."
                             )
-                            name, ext = os.path.splitext(original_target_name)
+                            name, ext = Path(original_target_name).stem, Path(original_target_name).suffix
                             final_target_path = (
                                 final_target_path.parent / f"{name}_{counter}{ext}"
                             )
@@ -3537,7 +3537,7 @@ class DragDropWindow(QMainWindow):
                             logging.error(
                                 f"Unexpected error during file comparison for {filename}: {e}. Attempting rename."
                             )
-                            name, ext = os.path.splitext(original_target_name)
+                            name, ext = Path(original_target_name).stem, Path(original_target_name).suffix
                             final_target_path = (
                                 final_target_path.parent / f"{name}_{counter}{ext}"
                             )
@@ -3671,10 +3671,10 @@ class DragDropWindow(QMainWindow):
         """Apply comprehensive renaming rules with improved UPD detection"""
         try:
             # Get original extension
-            original_ext = os.path.splitext(filename)[1].lower()
+            original_ext = Path(filename).suffix.lower()
 
             # Clean up the filename while preserving original for categorization
-            name_to_clean = os.path.splitext(filename)[0]
+            name_to_clean = Path(filename).stem
             name_to_clean = re.sub(r"®", "", name_to_clean)
 
             # Determine file type based on ORIGINAL name BEFORE cleaning versions
@@ -3943,7 +3943,7 @@ class DragDropWindow(QMainWindow):
                         counter = 1
                         orig_name = target_path.name
                         while target_path.exists():
-                            name, ext = os.path.splitext(orig_name)
+                            name, ext = Path(orig_name).stem, Path(orig_name).suffix
                             target_path = dlc_folder / f"{name}_{counter}{ext}"
                             counter += 1
 
@@ -3966,7 +3966,7 @@ class DragDropWindow(QMainWindow):
                         counter = 1
                         orig_name = target_path.name
                         while target_path.exists():
-                            name, ext = os.path.splitext(orig_name)
+                            name, ext = Path(orig_name).stem, Path(orig_name).suffix
                             target_path = dlc_root / f"{name}_{counter}{ext}"
                             counter += 1
 
@@ -4006,7 +4006,7 @@ class DragDropWindow(QMainWindow):
                                 # Handle name conflicts
                                 counter = 1
                                 while target_path.exists():
-                                    name, ext = os.path.splitext(file_path.name)
+                                    name, ext = file_path.stem, file_path.suffix
                                     target_path = dlc_folder / f"{name}_{counter}{ext}"
                                     counter += 1
 
@@ -4061,7 +4061,7 @@ class DragDropWindow(QMainWindow):
                                 # Handle name conflicts
                                 counter = 1
                                 while target_path.exists():
-                                    name, ext = os.path.splitext(file_path.name)
+                                    name, ext = file_path.stem, file_path.suffix
                                     target_path = dlc_folder / f"{name}_{counter}{ext}"
                                     counter += 1
 
@@ -4100,7 +4100,7 @@ class DragDropWindow(QMainWindow):
                                     # Handle name conflicts
                                     counter = 1
                                     while target_path.exists():
-                                        base, ext = os.path.splitext(file_path.name)
+                                        base, ext = file_path.stem, file_path.suffix
                                         target_path = dlc_dir / f"{base}_{counter}{ext}"
                                         counter += 1
 
@@ -4142,7 +4142,7 @@ class DragDropWindow(QMainWindow):
                             counter = 1
                             orig_name = target_path.name
                             while target_path.exists():
-                                name, ext = os.path.splitext(orig_name)
+                                name, ext = Path(orig_name).stem, Path(orig_name).suffix
                                 target_path = dlc_dir / f"{name}_{counter}{ext}"
                                 counter += 1
 
@@ -4267,7 +4267,7 @@ class DragDropWindow(QMainWindow):
                             # Handle name conflicts
                             counter = 1
                             while dest_path.exists():
-                                base, ext = os.path.splitext(dest_name)
+                                base, ext = Path(dest_name).stem, Path(dest_name).suffix
                                 dest_path = target_dlc / f"{base}_merged_{counter}{ext}"
                                 counter += 1
 
@@ -4297,7 +4297,7 @@ class DragDropWindow(QMainWindow):
                         # Handle name conflicts
                         counter = 1
                         while dest_path.exists():
-                            base, ext = os.path.splitext(item.name)
+                            base, ext = item.stem, item.suffix
                             dest_path = target / f"{base}_merged_{counter}{ext}"
                             counter += 1
 
@@ -4483,7 +4483,7 @@ class DragDropWindow(QMainWindow):
                             # Handle name conflicts
                             counter = 1
                             while dest_path.exists():
-                                base, ext = os.path.splitext(file_path.name)
+                                base, ext = file_path.stem, file_path.suffix
                                 dest_path = target_dlc / f"{base}_merged_{counter}{ext}"
                                 counter += 1
 
@@ -4583,7 +4583,7 @@ class DragDropWindow(QMainWindow):
                                     # Handle name conflicts
                                     counter = 1
                                     while dest_path.exists():
-                                        base, ext = os.path.splitext(file_path.name)
+                                        base, ext = file_path.stem, file_path.suffix
                                         dest_path = (
                                             target_dlc / f"{base}_merged_{counter}{ext}"
                                         )
@@ -5050,7 +5050,7 @@ class GameOrganizer:
             if file_path.name.lower().endswith((".nsp", ".xci")):
                 base_name = file_path.name
                 sanitized_name = self.sanitize_filename(base_name)
-                folder_name = os.path.splitext(sanitized_name)[0]
+                folder_name = Path(sanitized_name).stem
 
                 normalized_folder_name = self.normalize_folder_name(folder_name)
                 canonical_folder_name = self.get_canonical_folder_name(
@@ -5152,9 +5152,7 @@ class GameOrganizer:
                                 if target_item.exists():
                                     # Handle name conflict
                                     if source_item.is_file() and target_item.is_file():
-                                        base, suffix = os.path.splitext(
-                                            target_item.name
-                                        )
+                                        base, suffix = target_item.stem, target_item.suffix
                                         new_name = f"{base}_merged{suffix}"
                                         target_item = target / new_name
                                     elif source_item.is_dir() and target_item.is_dir():
@@ -5168,9 +5166,7 @@ class GameOrganizer:
                                             # Handle name conflicts
                                             counter = 1
                                             while sub_target.exists():
-                                                name_parts = os.path.splitext(
-                                                    sub_item.name
-                                                )
+                                                name_parts = sub_item.stem, sub_item.suffix
                                                 new_name = f"{name_parts[0]}_merged_{counter}{name_parts[1]}"
                                                 sub_target = target_item / new_name
                                                 counter += 1
@@ -5246,7 +5242,7 @@ class GameOrganizer:
 
 def count_dlc_files(directory: str) -> int:
     """Count total DLC files by scanning for [DLC] tag"""
-    if not directory or not os.path.isdir(directory):
+    if not directory or not Path(directory).is_dir():
         logging.error(f"Invalid directory: {directory}")
         return 0
 
@@ -5266,7 +5262,7 @@ def count_dlc_files(directory: str) -> int:
 
 def generate_file_summary(directory: str) -> str:
     """Generate a detailed summary of all tracked files"""
-    if not directory or not os.path.isdir(directory):
+    if not directory or not Path(directory).is_dir():
         logging.error(f"Invalid directory: {directory}")
         return "Error: Invalid directory"
 
@@ -5373,7 +5369,7 @@ def process_folder(directory: Path) -> None:
                     if target_item.exists():
                         if source_item.is_file() and target_item.is_file():
                             # If target already exists, add a suffix
-                            base, suffix = os.path.splitext(target_item.name)
+                            base, suffix = target_item.stem, target_item.suffix
                             new_name = f"{base}_merged{suffix}"
                             target_item = target_path / new_name
                         elif source_item.is_dir() and target_item.is_dir():
@@ -5392,7 +5388,7 @@ def process_folder(directory: Path) -> None:
                                 # Handle name conflicts
                                 counter = 1
                                 while sub_target.exists():
-                                    base, suffix = os.path.splitext(sub_item.name)
+                                    base, suffix = sub_item.stem, sub_item.suffix
                                     new_name = f"{base}_merged_{counter}{suffix}"
                                     sub_target = target_item / new_name
                                     counter += 1
@@ -5565,7 +5561,7 @@ def fix_folder_structure(directory: Path) -> None:
                     # Handle name conflicts
                     counter = 1
                     while target_path.exists():
-                        name, ext = os.path.splitext(nested_file.name)
+                        name, ext = nested_file.stem, nested_file.suffix
                         target_path = dlc_folder / f"{name}_{counter}{ext}"
                         counter += 1
 
@@ -5607,7 +5603,7 @@ def fix_folder_structure(directory: Path) -> None:
                         counter = 1
                         orig_name = target_path.name
                         while target_path.exists():
-                            name, ext = os.path.splitext(orig_name)
+                            name, ext = Path(orig_name).stem, Path(orig_name).suffix
                             target_path = dlc_folder / f"{name}_{counter}{ext}"
                             counter += 1
 
@@ -5649,7 +5645,7 @@ def fix_folder_structure(directory: Path) -> None:
                         counter = 1
                         orig_name = target_path.name
                         while target_path.exists():
-                            name, ext = os.path.splitext(orig_name)
+                            name, ext = Path(orig_name).stem, Path(orig_name).suffix
                             target_path = correct_dlc_folder / f"{name}_{counter}{ext}"
                             counter += 1
 
@@ -5672,7 +5668,7 @@ def rename_single_file(file_path: Path, authoritative_base_name: str):
     using the folder's name as the primary base, and preserving all tags.
     """
     original_filename = file_path.name
-    name_part, file_ext = os.path.splitext(original_filename)
+    name_part, file_ext = Path(original_filename).stem, Path(original_filename).suffix
 
     # 1. Extract the essential, non-negotiable tags (Hex ID and Type Tag)
     # Use the 16-character regex for hex ID
@@ -5837,7 +5833,7 @@ def standardize_filenames_to_folder(root_directoryectory: Path) -> None:
                                     continue
                                 else:
                                     # Append a suffix if different file with same name
-                                    base, ext = os.path.splitext(item.name)
+                                    base, ext = item.stem, item.suffix
                                     counter = 1
                                     while (
                                         target_path / f"{base}_{counter}{ext}"
@@ -5917,7 +5913,7 @@ def standardize_filenames_to_folder(root_directoryectory: Path) -> None:
                                     continue
                                 else:
                                     # Append a suffix if different file with same name
-                                    base, ext = os.path.splitext(src_item.name)
+                                    base, ext = src_item.stem, src_item.suffix
                                     counter = 1
                                     while (
                                         new_folder_path / f"{base}_{counter}{ext}"
@@ -6001,7 +5997,7 @@ def main() -> None:
     # Check if a directory path was provided as an argument
     if len(sys.argv) > 1:
         directory_path = sys.argv[1]
-        if os.path.isdir(directory_path):
+        if Path(directory_path).is_dir():
             # Add to processed directories to prevent reprocessing
             window.processed_directories.add(directory_path)
 
