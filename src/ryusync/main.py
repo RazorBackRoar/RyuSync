@@ -4298,6 +4298,13 @@ class DragDropWindow(QMainWindow):
             hex_pattern_folders = {}
 
             # Group folders by hex pattern series or by matching IDs
+
+            # Precompile regex patterns for performance optimization
+            compiled_hex_patterns = [
+                (hex_pattern, re.compile(rf"\[{hex_pattern}[0-9A-Fa-f]{{4}}\]"))
+                for hex_pattern in COMMON_DLC_HEX_PATTERNS
+            ]
+
             for folder in folders:
                 if folder in processed:
                     continue
@@ -4307,12 +4314,10 @@ class DragDropWindow(QMainWindow):
                     continue
 
                 # Look for hex patterns in files within the folder
-                for hex_pattern in COMMON_DLC_HEX_PATTERNS:
+                for hex_pattern, regex in compiled_hex_patterns:
                     found = False
                     for file_path in folder.glob("*.nsp"):
-                        if re.search(
-                            rf"\[{hex_pattern}[0-9A-Fa-f]{{4}}\]", file_path.name
-                        ):
+                        if regex.search(file_path.name):
                             if hex_pattern not in hex_pattern_folders:
                                 hex_pattern_folders[hex_pattern] = []
                             hex_pattern_folders[hex_pattern].append(folder)
