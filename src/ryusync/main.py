@@ -3892,10 +3892,7 @@ class DragDropWindow(QMainWindow):
         """Validate if the file is a proper Switch game file."""
         try:
             # Check file extension
-            if file_path.suffix.lower() not in (".nsp", ".xci"):
-                return False
-
-            return True
+            return file_path.suffix.lower() in (".nsp", ".xci")
         except Exception as e:
             logging.error(f"Error validating file {file_path}: {e}")
             return False
