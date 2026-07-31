@@ -4406,6 +4406,9 @@ class DragDropWindow(QMainWindow):
                 if not folder1_files:
                     continue
 
+                # Pre-compute base IDs for efficiency
+                folder1_base_ids = [get_base_id(extract_game_id(f.name)) for f in folder1_files]
+
                 for j in range(i + 1, len(remaining_folders)):
                     folder2 = remaining_folders[j]
                     if folder2 in processed:
@@ -4415,11 +4418,13 @@ class DragDropWindow(QMainWindow):
                     if not folder2_files:
                         continue
 
+                    folder2_base_ids = [get_base_id(extract_game_id(f.name)) for f in folder2_files]
+
                     # Check all file combinations for matching IDs
                     match_found = False
-                    for file1 in folder1_files:
-                        for file2 in folder2_files:
-                            if is_same_game(file1.name, file2.name):
+                    for b1 in folder1_base_ids:
+                        for b2 in folder2_base_ids:
+                            if b1 and b2 and b1 == b2:
                                 id_matched_pairs.append((folder1, folder2))
                                 processed.add(folder1)
                                 processed.add(folder2)
