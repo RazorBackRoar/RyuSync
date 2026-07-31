@@ -6001,12 +6001,17 @@ def main() -> None:
     # Check if a directory path was provided as an argument
     if len(sys.argv) > 1:
         directory_path = sys.argv[1]
-        if os.path.isdir(directory_path):
-            # Add to processed directories to prevent reprocessing
-            window.processed_directories.add(directory_path)
+        resolved_path = os.path.abspath(directory_path)
 
-            logging.info(f"Processing directory from command line: {directory_path}")
-            window.process_dropped_directory(Path(directory_path))
+        safe_prefixes = (os.path.expanduser("~"), "/Volumes")
+        if not resolved_path.startswith(safe_prefixes):
+            logging.error(f"Security Error: Directory path is outside safe directories: {directory_path}")
+        elif os.path.isdir(resolved_path):
+            # Add to processed directories to prevent reprocessing
+            window.processed_directories.add(resolved_path)
+
+            logging.info(f"Processing directory from command line: {resolved_path}")
+            window.process_dropped_directory(Path(resolved_path))
 
         else:
             logging.error(f"Invalid directory path: {directory_path}")
