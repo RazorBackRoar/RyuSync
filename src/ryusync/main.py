@@ -424,11 +424,14 @@ xci_upds: FileList = []
 xci_dlcs: FileList = []
 
 
+GAME_ID_PATTERN = re.compile(r"\[(01[0-9A-Fa-f]{14,16})\]", re.IGNORECASE)
+
+
 # Modify extract_game_id to return the full 16-char hex ID string
 def extract_game_id(filename):
     """Extract the full 16-character game ID from filename."""
     # Match common Switch title ID lengths, preferring the standard 16-character form.
-    id_match = re.search(r"\[(01[0-9A-Fa-f]{14,16})\]", filename, re.IGNORECASE)
+    id_match = GAME_ID_PATTERN.search(filename)
     if id_match:
         return id_match.group(1).upper()
     return None
