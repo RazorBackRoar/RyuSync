@@ -550,6 +550,96 @@ def add_file(filename: str, file_type: str, category: str) -> None:
         logging.error(f"Failed to add file {filename}: {e}")
 
 
+def _is_dlc_file(filename: str, upper_filename: str, upper_folder: str) -> bool:
+    """Helper function to determine if a file is a DLC."""
+    if "[DLC]" in upper_filename or "(DLC)" in upper_filename:
+        return True
+
+    # Check for known DLC hex patterns (e.g., ...1xxx)
+    if re.search(r"\[01[0-9A-Fa-f]{12}1[0-9A-Fa-f]{3}\]", filename, re.IGNORECASE):
+        return True
+
+    for base_pattern in COMMON_DLC_HEX_PATTERNS:
+        if re.search(rf"\[{base_pattern}1[0-9A-Fa-f]{{3}}\]", filename, re.IGNORECASE):
+            return True
+
+    # Use global DLC_INDICATORS with word boundary checks for more precise matching.
+    for pattern in DLC_INDICATORS:
+        clean_pattern = pattern.replace(r"(?i)", "")
+        if re.search(
+            rf"\[(?:[^\]]*?(?<![a-zA-Z0-9]){clean_pattern}(?![a-zA-Z0-9])[^\]]*?)\]"
+            rf"|(?<![a-zA-Z0-9]){clean_pattern}(?![a-zA-Z0-9])",
+            filename,
+            re.IGNORECASE,
+        ):
+            return True
+
+    dlc_content_regex = "|".join([re.escape(p) for p in DLC_CONTENT_PATTERNS])
+    if re.search(rf"\[.*?({dlc_content_regex}).*?\]", filename, re.IGNORECASE):
+        return True
+
+    if upper_folder and "DLC" in upper_folder:
+        return True
+
+    return False
+
+
+def _is_update_file(filename: str, upper_filename: str, upper_folder: str) -> bool:
+    """Helper function to determine if a file is an update."""
+    if "[UPD]" in upper_filename:
+        return True
+
+    if any(
+        re.search(pattern, filename, re.IGNORECASE)
+        for pattern in KNOWN_UPDATE_HEX_PATTERNS
+    ):
+        return True
+
+    if re.search(r"\[01[0-9A-Fa-f]{11}800\]", filename, re.IGNORECASE):
+        return True
+
+    if re.search(r"\b(UPDATE|PATCH|REVISION)\b", upper_filename):
+        return True
+
+    if upper_folder and any(
+        kw in upper_folder for kw in ["UPDATE", "PATCH", "REVISION"]
+    ):
+        return True
+
+    return False
+
+
+def _is_base_game_indicator(filename: str, upper_filename: str) -> bool:
+    """Helper function to check for base game indicators."""
+    if re.search(r"\b[vV]0\b|\[v0\]|\(v0\)|\[0\]", filename, re.IGNORECASE):
+        if not re.search(r"\b(UPDATE|PATCH|REVISION)\b", upper_filename):
+            return True
+
+    if re.search(r"\[01[0-9A-Fa-f]{11}000\]", filename, re.IGNORECASE):
+        if not re.search(r"\b(UPDATE|PATCH|REVISION)\b", upper_filename):
+            return True
+
+    return False
+
+
+def _has_version_number(filename: str) -> bool:
+    """Helper function to check for comprehensive version detection formats."""
+    version_match_v = re.search(
+        r"\b[vV](?:er(?:sion)?)?\.?\s*([1-9]\d*)[\w\.\-]*", filename
+    )
+    version_match_f = re.search(r"\b[fF](\d+)\b", filename)
+
+    if version_match_v or version_match_f:
+        return True
+
+    if re.search(
+        r"\[v[1-9]\d*[\w\.\-]*\]|\(v[1-9]\d*[\w\.\-]*\)", filename, re.IGNORECASE
+    ):
+        return True
+
+    return False
+
+
 def categorize_file(filename: str, folder_path: str | None = None) -> FileType:
     """
     Determine the file type (GAME, UPDATE, or DLC) based on filename patterns.
@@ -565,106 +655,21 @@ def categorize_file(filename: str, folder_path: str | None = None) -> FileType:
     upper_filename = filename.upper()
     upper_folder = folder_path.upper() if folder_path else ""
 
-    # --- Priority 1: Explicit DLC Tags & Hex Patterns ---
-    if "[DLC]" in upper_filename or "(DLC)" in upper_filename:
+    if _is_dlc_file(filename, upper_filename, upper_folder):
         return FileType.DLC
 
-    # Check for known DLC hex patterns (e.g., ...1xxx)
-    if re.search(r"\[01[0-9A-Fa-f]{12}1[0-9A-Fa-f]{3}\]", filename, re.IGNORECASE):
-        return FileType.DLC
-
-    for base_pattern in COMMON_DLC_HEX_PATTERNS:
-        if re.search(rf"\[{base_pattern}1[0-9A-Fa-f]{{3}}\]", filename, re.IGNORECASE):
-            return FileType.DLC
-
-    # --- Priority 2: DLC Keywords & Content Descriptors ---
-    # Use global DLC_INDICATORS with word boundary checks for more precise matching.
-    # Boundaries treat underscores and hyphens as separators so snake_case / kebab-case
-    # DLC filenames (e.g. "..._deluxe_edition_bonuses_dlc") are recognized.
-    for pattern in DLC_INDICATORS:
-        # Remove the regex prefix/suffix and use an alphanumeric boundary instead
-        clean_pattern = pattern.replace(r"(?i)", "")
-        if re.search(
-            rf"\[(?:[^\]]*?(?<![a-zA-Z0-9]){clean_pattern}(?![a-zA-Z0-9])[^\]]*?)\]"
-            rf"|(?<![a-zA-Z0-9]){clean_pattern}(?![a-zA-Z0-9])",
-            filename,
-            re.IGNORECASE,
-        ):
-            return FileType.DLC
-
-    # Content descriptors with more precise patterns
-    dlc_content_regex = "|".join([re.escape(p) for p in DLC_CONTENT_PATTERNS])
-    if re.search(rf"\[.*?({dlc_content_regex}).*?\]", filename, re.IGNORECASE):
-        return FileType.DLC
-
-    # Folder context
-    if folder_path and "DLC" in upper_folder:
-        return FileType.DLC
-
-    # --- Priority 3: Explicit Update Tags & Hex Patterns ---
-    if "[UPD]" in upper_filename:
+    if _is_update_file(filename, upper_filename, upper_folder):
         return FileType.UPDATE
 
-    # Check for known update patterns
-    if any(
-        re.search(pattern, filename, re.IGNORECASE)
-        for pattern in KNOWN_UPDATE_HEX_PATTERNS
-    ):
+    if _is_base_game_indicator(filename, upper_filename):
+        return FileType.GAME
+
+    if _has_version_number(filename):
         return FileType.UPDATE
 
-    # Update title IDs end in 800. A standard 16-hex-char ID is "01" + 11 hex
-    # + the 3-nibble type suffix, so this must be {11}, not {12} (a {12} count
-    # requires a 17-char ID and never matched real title IDs).
-    if re.search(r"\[01[0-9A-Fa-f]{11}800\]", filename, re.IGNORECASE):
-        return FileType.UPDATE
-
-    # --- Priority 4: Update Keywords ---
-    if re.search(r"\b(UPDATE|PATCH|REVISION)\b", upper_filename):
-        return FileType.UPDATE
-
-    if folder_path and any(
-        kw in upper_folder for kw in ["UPDATE", "PATCH", "REVISION"]
-    ):
-        return FileType.UPDATE
-
-    # --- Priority 5: Check for Base Game Indicators First ---
-    # Check for v0 specifically -> GAME (MUST BE CHECKED BEFORE v[1-9])
-    if re.search(r"\b[vV]0\b|\[v0\]|\(v0\)|\[0\]", filename, re.IGNORECASE):
-        # Ensure it's not explicitly marked as Update/Patch elsewhere
-        if not re.search(r"\b(UPDATE|PATCH|REVISION)\b", upper_filename):
-            return FileType.GAME
-
-    # Base game title IDs end in 000. A standard 16-hex-char ID is "01" + 11 hex
-    # + the 3-nibble type suffix, so this must be {11}, not {12}. This base-game
-    # check is intentionally ordered before the version-number heuristic below,
-    # so a base game with a non-zero version tag (e.g. [v65536]) is still GAME.
-    if re.search(r"\[01[0-9A-Fa-f]{11}000\]", filename, re.IGNORECASE):
-        # Ensure it's not explicitly marked as Update/Patch elsewhere
-        if not re.search(r"\b(UPDATE|PATCH|REVISION)\b", upper_filename):
-            return FileType.GAME
-
-    # --- Priority 6: Version Number Patterns (Only if NOT DLC) ---
-    # More comprehensive version detection for formats like: v1, v1.1.2, Version 1.0, Ver 2
-    version_match_v = re.search(
-        r"\b[vV](?:er(?:sion)?)?\.?\s*([1-9]\d*)[\w\.\-]*", filename
-    )
-    version_match_f = re.search(r"\b[fF](\d+)\b", filename)  # f<digits> format
-
-    if version_match_v or version_match_f:
-        return FileType.UPDATE
-
-    # Version in brackets or parentheses
-    if re.search(
-        r"\[v[1-9]\d*[\w\.\-]*\]|\(v[1-9]\d*[\w\.\-]*\)", filename, re.IGNORECASE
-    ):
-        return FileType.UPDATE
-
-    # --- Priority 7: Base+DLC Tag ---
     if "[BASE+DLC]" in upper_filename:
         return FileType.GAME
 
-    # --- Priority 8: Default ---
-    # If we get here and see APP tag, likely a base game
     if "[APP]" in upper_filename:
         return FileType.GAME
 
