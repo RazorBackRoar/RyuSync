@@ -39,7 +39,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="module", autouse=True)
 def qapp() -> QApplication:
     app = QApplication.instance()
     if isinstance(app, QApplication):
@@ -48,7 +48,7 @@ def qapp() -> QApplication:
 
 
 @pytest.fixture
-def window(qapp: QApplication) -> DragDropWindow:
+def window() -> DragDropWindow:
     win = DragDropWindow()
     yield win
     win.close()
