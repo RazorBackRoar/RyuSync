@@ -5596,7 +5596,7 @@ def fix_folder_structure(directory: Path) -> None:
                     logging.error(f"Could not remove nested DLC folder: {e}")
 
             # Fix any DLC subfolders in the DLC folder (shouldn't be any)
-            for subfolder in dlc_folder.iterdir():
+            for subfolder in list(dlc_folder.iterdir()):
                 if subfolder.is_dir() and subfolder.name != "DLC":
                     # Move all files from subfolders directly to DLC folder
                     for file_path in subfolder.rglob("*"):
