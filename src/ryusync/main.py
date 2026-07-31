@@ -1965,15 +1965,15 @@ class FolderProcessingWorker(BaseWorker):
                             )
                             is_duplicate = True
                             break
-                        else:
-                            logging.warning(
-                                f"Different file with same name exists at {final_target_path.relative_to(directory)}. Appending _{counter}."
-                            )
-                            name, ext = os.path.splitext(original_target_name)
-                            final_target_path = (
-                                final_target_path.parent / f"{name}_{counter}{ext}"
-                            )
-                            counter += 1
+
+                        logging.warning(
+                            f"Different file with same name exists at {final_target_path.relative_to(directory)}. Appending _{counter}."
+                        )
+                        name, ext = os.path.splitext(original_target_name)
+                        final_target_path = (
+                            final_target_path.parent / f"{name}_{counter}{ext}"
+                        )
+                        counter += 1
                     except OSError as cmp_error:
                         logging.error(
                             f"Error comparing file {filename} with {final_target_path}: {cmp_error}. Attempting rename."
