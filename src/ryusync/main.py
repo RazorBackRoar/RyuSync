@@ -1693,23 +1693,8 @@ class FolderProcessingWorker(BaseWorker):
             except OSError as e:
                 logging.warning("[RyuSync] could not remove archive %s: %s", archive, e)
 
-    def process_folder_logic(
-        self, directory: Path, original_parent: Path | None = None
-    ) -> str:
-        """Thread-safe version of directory processing logic without UI operations"""
-        logging.info(f"Worker thread processing directory: {directory}")
-        processed_files = 0
-        failed_files = []
 
-        # Count total files for progress reporting
-        total_files = sum(
-            1
-            for f in directory.rglob("*")
-            if f.is_file() and f.suffix.lower() in (".nsp", ".xci")
-        )
-        self.progress.emit(str(directory), 0, total_files)
-
-        # --- Optional: Keep version removal from folders ---
+    def _remove_version_tags(self, directory: Path) -> None:
         for folder in directory.iterdir():
             if folder.is_dir():
                 has_upd = any(
@@ -1719,65 +1704,46 @@ class FolderProcessingWorker(BaseWorker):
                     remove_versions_from_path(folder)
                     logging.info(f"Processed version tags in folder: {folder.name}")
 
-        # Step 2: Move all files to top level directory
-        logging.info("Moving all files to top directory")
-        all_files_at_root = []  # Store Path objects of files moved to root
-        original_subdirs = [
-            d for d in directory.iterdir() if d.is_dir()
-        ]  # List dirs before moving
+    def _flatten_directory(
+        self, directory: Path, allowed_roots: list[Path], total_files: int
+    ) -> tuple[list[Path], list[Path], list[str], int]:
+        all_files_at_root = []
+        original_subdirs = [d for d in directory.iterdir() if d.is_dir()]
+        failed_files = []
+        processed_files = 0
 
-        allowed_roots = [directory]
-        if original_parent:
-            allowed_roots.append(original_parent)
-
-        for root, _, files in os.walk(
-            str(directory), topdown=False
-        ):  # topdown=False helps with deleting dirs later
+        for root, _, files in os.walk(str(directory), topdown=False):
             root_path = Path(root)
             if root_path == directory:
-                # Add files already at the root
                 for file in files:
                     file_lower = file.lower()
                     root_file = directory / file
                     if file_lower.endswith((".nsp", ".xci")):
                         all_files_at_root.append(root_file)
                     elif should_clean_file(root_file):
-                        # Clean junk (.url/.URL, OS metadata) sitting at the root
-                        # of the processing folder too — e.g. a .URL file extracted
-                        # from a dropped .nsp.rar or sitting beside it.
                         try:
                             safe_unlink(root_file, allowed_roots, directory)
-                            logging.info(
-                                f"Deleted URL/metadata shortcut file: {root_file}"
-                            )
+                            logging.info(f"Deleted URL/metadata shortcut file: {root_file}")
                         except OSError as e:
-                            logging.warning(
-                                f"Could not remove URL/metadata shortcut file {root_file}: {e}"
-                            )
+                            logging.warning(f"Could not remove URL/metadata shortcut file {root_file}: {e}")
                     else:
                         logging.info(f"Skipped unrelated non-game file: {root_file}")
-                continue  # Skip processing root further in this loop
+                continue
 
             for file in files:
                 file_path = root_path / file
                 if not file.lower().endswith((".nsp", ".xci")):
-                    # Handle non-game files (e.g., delete .url/.URL or OS metadata files)
                     if should_clean_file(file_path):
                         try:
                             safe_unlink(file_path, allowed_roots, directory)
-                            logging.info(
-                                f"Deleted URL/metadata shortcut file: {file_path}"
-                            )
+                            logging.info(f"Deleted URL/metadata shortcut file: {file_path}")
                         except OSError as e:
-                            logging.warning(
-                                f"Could not remove URL/metadata shortcut file {file_path}: {e}"
-                            )
+                            logging.warning(f"Could not remove URL/metadata shortcut file {file_path}: {e}")
                     else:
                         logging.info(f"Skipped unrelated non-game file: {file_path}")
                     continue
 
                 target_path = directory / file
-
                 try:
                     counter = 1
                     original_target_name = target_path.name
@@ -1787,50 +1753,39 @@ class FolderProcessingWorker(BaseWorker):
                         counter += 1
 
                     safe_move(file_path, target_path, allowed_roots)
-                    all_files_at_root.append(target_path)  # Add the Path object
+                    all_files_at_root.append(target_path)
                     processed_files += 1
-                    # Update progress periodically (every 5 files)
                     if processed_files % 5 == 0:
                         self.progress.emit(str(directory), processed_files, total_files)
                 except Exception as e:
                     logging.error(f"Error moving file {file_path}: {e}")
                     failed_files.append(str(file_path))
 
-        # Step 3: Force remove original subdirectories after flattening
-        logging.info("Force removing original subdirectories...")
+        return all_files_at_root, original_subdirs, failed_files, processed_files
+
+    def _remove_original_subdirectories(
+        self, original_subdirs: list[Path], allowed_roots: list[Path], directory: Path
+    ) -> None:
         for item in original_subdirs:
             try:
-                if (
-                    item.exists() and item.is_dir()
-                ):  # Check if it still exists before attempting removal
+                if item.exists() and item.is_dir():
                     remove_empty_directories(item, allowed_roots, directory)
             except Exception as e:
-                logging.error(
-                    f"Error removing original directory {item.name}: {e}"
-                )  # Log error but continue
+                logging.error(f"Error removing original directory {item.name}: {e}")
 
-        # Step 4: Process and organize files by Title ID or fallback base name
-        logging.info(
-            "Processing and organizing files by Title ID or fallback base name"
-        )
-        group_key_to_folder: dict[
-            str, Path
-        ] = {}  # Maps group key (base_id or clean name) to folder Path
-        group_key_to_best_name: dict[
-            str, str
-        ] = {}  # Maps group key to preferred folder name
+    def _organize_files_by_group(
+        self, directory: Path, all_files_at_root: list[Path], allowed_roots: list[Path]
+    ) -> tuple[int, list[str]]:
+        group_key_to_folder: dict[str, Path] = {}
+        group_key_to_best_name: dict[str, str] = {}
         file_to_group_key: dict[Path, str] = {}
 
-        # First pass: Identify grouping keys and best names
-        logging.info("First pass: Identifying grouping keys and best names...")
         for file_path in all_files_at_root:
             if not file_path.exists():
                 continue
             filename = file_path.name
-            # Categorize early so DLC files can share a stripped base name
             file_type = categorize_file(filename)
             is_dlc = file_type == FileType.DLC
-            # Robust hex ID extraction: 16 or 15 hex chars
             id_match = re.search(r"\[(01[0-9A-Fa-f]{14,16})\]", filename)
             full_id = id_match.group(1) if id_match else None
             base_id = get_base_id(full_id) if full_id else None
@@ -1838,37 +1793,23 @@ class FolderProcessingWorker(BaseWorker):
             if base_id:
                 group_key = base_id
             else:
-                # Fallback: use cleaned base name as group key
                 group_key = _get_base_name(filename, is_dlc=is_dlc)
-                if not group_key or group_key.lower() in (
-                    "unknown",
-                    "",
-                ):  # If still unknown, truly ungroupable
+                if not group_key or group_key.lower() in ("unknown", ""):
                     group_key = None
             if group_key is not None:
                 file_to_group_key[file_path] = group_key
 
-            # Determine a clean base name from this file
             current_clean_name = get_clean_base_name(filename, is_dlc=is_dlc)
+            is_preferred_source = file_type == FileType.GAME or file_type == FileType.UPDATE
 
-            # Prefer names from GME/UPD files over DLC files for the folder name
-            is_preferred_source = (
-                file_type == FileType.GAME or file_type == FileType.UPDATE
-            )
-
-            # Update the best name for this group_key if this one is better
-            if group_key and (
-                group_key not in group_key_to_best_name or is_preferred_source
-            ):
-                folder_name_candidate = re.sub(r'[<>:"/\\|?*]', "_", current_clean_name)
+            if group_key and (group_key not in group_key_to_best_name or is_preferred_source):
+                folder_name_candidate = re.sub(r'[<>:"/\|?*]', "_", current_clean_name)
                 folder_name_candidate = folder_name_candidate.strip() or group_key
                 group_key_to_best_name[group_key] = folder_name_candidate
 
-        # Second pass: Create folders and move files
-        logging.info("Second pass: Creating folders and moving files...")
         processed_files_count = 0
+        failed_files = []
         folder_path_by_name: dict[str, Path] = {}
-        # Process base games/updates first so DLCs can fuzzy-match to existing folders
         sorted_files = sorted(
             all_files_at_root,
             key=lambda p: (
@@ -1883,29 +1824,21 @@ class FolderProcessingWorker(BaseWorker):
             group_key = file_to_group_key.get(file_path)
 
             if not group_key or group_key not in group_key_to_best_name:
-                # Move to truly unknown if not groupable
                 unknown_folder = directory / "_UNKNOWN_ID"
                 safe_mkdir(unknown_folder, allowed_roots, exist_ok=True)
                 try:
                     safe_move(file_path, unknown_folder / filename, allowed_roots)
                 except Exception as e:
-                    logging.error(
-                        f"Could not move file with unknown group {filename}: {e}"
-                    )
+                    logging.error(f"Could not move file with unknown group {filename}: {e}")
                 continue
 
-            canonical_folder_name = self.game_organizer.sanitize_filename(
-                group_key_to_best_name[group_key]
-            )
+            canonical_folder_name = self.game_organizer.sanitize_filename(group_key_to_best_name[group_key])
             canonical_folder_name = canonical_folder_name.rstrip(".")
-            canonical_folder_name = smart_title_case(
-                restore_roman_numerals(canonical_folder_name)
-            )
+            canonical_folder_name = smart_title_case(restore_roman_numerals(canonical_folder_name))
             parent_dir_name = file_path.parent.name
-            # If we are already in the canonical folder, don't create another subfolder
+
             if parent_dir_name == canonical_folder_name:
                 game_folder = file_path.parent
-                # Optionally, if the folder is not exactly canonical, rename it
                 if game_folder.name != canonical_folder_name:
                     new_path = game_folder.parent / canonical_folder_name
                     if not new_path.exists():
@@ -1913,9 +1846,7 @@ class FolderProcessingWorker(BaseWorker):
                         game_folder = new_path
             elif canonical_folder_name in folder_path_by_name:
                 game_folder = folder_path_by_name[canonical_folder_name]
-            elif match_name := self.game_organizer.fuzzy_match(
-                canonical_folder_name, list(folder_path_by_name.keys())
-            ):
+            elif match_name := self.game_organizer.fuzzy_match(canonical_folder_name, list(folder_path_by_name.keys())):
                 game_folder = folder_path_by_name[match_name]
                 canonical_folder_name = match_name
             else:
@@ -1924,10 +1855,8 @@ class FolderProcessingWorker(BaseWorker):
                 folder_path_by_name[canonical_folder_name] = game_folder
             group_key_to_folder[group_key] = game_folder
 
-            # Apply final renaming rules to the file (ALWAYS tags file as [GME]/[UPD]/[DLC])
             renamed_file = self._apply_renaming_rules(filename)
 
-            # Determine category based on tags in the *renamed* file
             if "[DLC]" in renamed_file.upper():
                 category = "dlc"
             elif "[UPD]" in renamed_file.upper():
@@ -1935,7 +1864,6 @@ class FolderProcessingWorker(BaseWorker):
             else:
                 category = "gme"
 
-            # DLCs go in a DLC subfolder
             if category == "dlc":
                 dlc_folder = game_folder / "DLC"
                 safe_mkdir(dlc_folder, allowed_roots, exist_ok=True)
@@ -1943,7 +1871,6 @@ class FolderProcessingWorker(BaseWorker):
             else:
                 target_path = game_folder / renamed_file
 
-            # Move file to final location, handle conflicts
             try:
                 counter = 1
                 original_target_name = target_path.name
@@ -1951,127 +1878,70 @@ class FolderProcessingWorker(BaseWorker):
                 is_duplicate = False
                 while final_target_path.exists():
                     if file_path.resolve() == final_target_path.resolve():
-                        logging.warning(
-                            f"Source and target are the same file, skipping move: {file_path}"
-                        )
+                        logging.warning(f"Source and target are the same file, skipping move: {file_path}")
                         is_duplicate = True
                         break
                     try:
-                        if filecmp.cmp(
-                            str(file_path), str(final_target_path), shallow=False
-                        ):
-                            logging.warning(
-                                f"Identical file already exists at {final_target_path.relative_to(directory)}. Skipping move for duplicate source: {filename}"
-                            )
+                        if filecmp.cmp(str(file_path), str(final_target_path), shallow=False):
+                            logging.warning(f"Identical file already exists at {final_target_path.relative_to(directory)}. Skipping move for duplicate source: {filename}")
                             is_duplicate = True
                             break
                         else:
-                            logging.warning(
-                                f"Different file with same name exists at {final_target_path.relative_to(directory)}. Appending _{counter}."
-                            )
+                            logging.warning(f"Different file with same name exists at {final_target_path.relative_to(directory)}. Appending _{counter}.")
                             name, ext = os.path.splitext(original_target_name)
-                            final_target_path = (
-                                final_target_path.parent / f"{name}_{counter}{ext}"
-                            )
+                            final_target_path = final_target_path.parent / f"{name}_{counter}{ext}"
                             counter += 1
                     except OSError as cmp_error:
-                        logging.error(
-                            f"Error comparing file {filename} with {final_target_path}: {cmp_error}. Attempting rename."
-                        )
+                        logging.error(f"Error comparing file {filename} with {final_target_path}: {cmp_error}. Attempting rename.")
                         name, ext = os.path.splitext(original_target_name)
-                        final_target_path = (
-                            final_target_path.parent / f"{name}_{counter}{ext}"
-                        )
+                        final_target_path = final_target_path.parent / f"{name}_{counter}{ext}"
                         counter += 1
                     except Exception as e:
-                        logging.error(
-                            f"Unexpected error during file comparison for {filename}: {e}. Attempting rename."
-                        )
+                        logging.error(f"Unexpected error during file comparison for {filename}: {e}. Attempting rename.")
                         name, ext = os.path.splitext(original_target_name)
-                        final_target_path = (
-                            final_target_path.parent / f"{name}_{counter}{ext}"
-                        )
+                        final_target_path = final_target_path.parent / f"{name}_{counter}{ext}"
                         counter += 1
-                if (
-                    not is_duplicate
-                    and file_path.exists()
-                    and file_path.resolve() != final_target_path.resolve()
-                ):
+
+                if not is_duplicate and file_path.exists() and file_path.resolve() != final_target_path.resolve():
                     safe_move(file_path, final_target_path, allowed_roots)
                     processed_files_count += 1
-                    logging.debug(
-                        f"Moved {filename} -> {final_target_path.relative_to(directory)}"
-                    )
+                    logging.debug(f"Moved {filename} -> {final_target_path.relative_to(directory)}")
                 elif is_duplicate:
                     processed_files_count += 1
             except Exception as e:
                 logging.error(f"Error moving file {filename} to {target_path}: {e}")
                 failed_files.append(filename)
 
-        # Generate summary text and collect file counts
-        nsp_game_count = sum(
-            1 for f in directory.glob("**/*.nsp") if "[GME]" in f.name.upper()
-        )
-        nsp_upd_count = sum(
-            1 for f in directory.glob("**/*.nsp") if "[UPD]" in f.name.upper()
-        )
-        nsp_dlc_count = sum(
-            1 for f in directory.glob("**/*.nsp") if "[DLC]" in f.name.upper()
-        )
-        xci_game_count = sum(
-            1 for f in directory.glob("**/*.xci") if "[GME]" in f.name.upper()
-        )
-        xci_upd_count = sum(
-            1 for f in directory.glob("**/*.xci") if "[UPD]" in f.name.upper()
-        )
-        xci_dlc_count = sum(
-            1 for f in directory.glob("**/*.xci") if "[DLC]" in f.name.upper()
-        )
+        return processed_files_count, failed_files
 
-        total_games = nsp_game_count + xci_game_count
-        total_updates = nsp_upd_count + xci_upd_count
-        total_dlcs = nsp_dlc_count + xci_dlc_count
-        total_files = total_games + total_updates + total_dlcs
+    def _generate_summary_and_counts(
+        self, directory: Path, processed_files_count: int, failed_files: list[str]
+    ) -> str:
+        nsp_game_count = sum(1 for f in directory.glob("**/*.nsp") if "[GME]" in f.name.upper())
+        nsp_upd_count = sum(1 for f in directory.glob("**/*.nsp") if "[UPD]" in f.name.upper())
+        nsp_dlc_count = sum(1 for f in directory.glob("**/*.nsp") if "[DLC]" in f.name.upper())
+        xci_game_count = sum(1 for f in directory.glob("**/*.xci") if "[GME]" in f.name.upper())
+        xci_upd_count = sum(1 for f in directory.glob("**/*.xci") if "[UPD]" in f.name.upper())
+        xci_dlc_count = sum(1 for f in directory.glob("**/*.xci") if "[DLC]" in f.name.upper())
 
-        # Collect file paths for each category to emit back to main thread
         file_counts_dict = {
-            "nsp_games": [
-                str(f) for f in directory.glob("**/*.nsp") if "[GME]" in f.name.upper()
-            ],
-            "nsp_updates": [
-                str(f) for f in directory.glob("**/*.nsp") if "[UPD]" in f.name.upper()
-            ],
-            "nsp_dlcs": [
-                str(f) for f in directory.glob("**/*.nsp") if "[DLC]" in f.name.upper()
-            ],
-            "xci_games": [
-                str(f) for f in directory.glob("**/*.xci") if "[GME]" in f.name.upper()
-            ],
-            "xci_updates": [
-                str(f) for f in directory.glob("**/*.xci") if "[UPD]" in f.name.upper()
-            ],
-            "xci_dlcs": [
-                str(f) for f in directory.glob("**/*.xci") if "[DLC]" in f.name.upper()
-            ],
+            "nsp_games": [str(f) for f in directory.glob("**/*.nsp") if "[GME]" in f.name.upper()],
+            "nsp_updates": [str(f) for f in directory.glob("**/*.nsp") if "[UPD]" in f.name.upper()],
+            "nsp_dlcs": [str(f) for f in directory.glob("**/*.nsp") if "[DLC]" in f.name.upper()],
+            "xci_games": [str(f) for f in directory.glob("**/*.xci") if "[GME]" in f.name.upper()],
+            "xci_updates": [str(f) for f in directory.glob("**/*.xci") if "[UPD]" in f.name.upper()],
+            "xci_dlcs": [str(f) for f in directory.glob("**/*.xci") if "[DLC]" in f.name.upper()],
         }
 
-        # Emit file counts to be processed in the main thread
         self.file_counts.emit(file_counts_dict)
 
-        # Build summary text
         summary = "----- Processed Switch Games -----\n\n"
-
-        # NSP Section
         summary += f"NSP Games:  {nsp_game_count}\n"
         summary += f"NSP UPDs:   {nsp_upd_count}\n"
         summary += f"NSP DLCs:   {nsp_dlc_count}\n\n"
-
-        # XCI Section
         summary += f"XCI Games:  {xci_game_count}\n"
         summary += f"XCI UPDs:   {xci_upd_count}\n"
         summary += f"XCI DLCs:   {xci_dlc_count}\n\n"
-
-        # Totals Section
         summary += "----- Totals -----\n\n"
         summary += f"Total NSP:   {nsp_game_count + nsp_upd_count + nsp_dlc_count}\n"
         summary += f"Total XCI:   {xci_game_count + xci_upd_count + xci_dlc_count}\n"
@@ -2081,11 +1951,7 @@ class FolderProcessingWorker(BaseWorker):
         summary += "----------------------------\n"
 
         unknown_dir = directory / "_UNKNOWN_ID"
-        unknown_count = (
-            sum(1 for f in unknown_dir.glob("*") if f.is_file())
-            if unknown_dir.exists()
-            else 0
-        )
+        unknown_count = sum(1 for f in unknown_dir.glob("*") if f.is_file()) if unknown_dir.exists() else 0
 
         if processed_files_count > 0:
             summary += f"\nSuccessfully processed {processed_files_count} files."
@@ -2105,42 +1971,66 @@ class FolderProcessingWorker(BaseWorker):
             summary += "(RAR may be corrupt, password-protected,\n or split across multiple parts)"
 
         summary += "\nDrop another folder to process."
+        return summary
 
-        # Send final progress update to ensure UI shows 100% completion
-        self.progress.emit(str(directory), total_files, total_files)
-
-        # --- Final Step: Cleanup for multi-drop operations ---
-        if (
-            original_parent
-            and original_parent.exists()
-            and directory.name.startswith("ryusync_temp_")
-        ):
+    def _cleanup_temp_directory(self, directory: Path, original_parent: Path, allowed_roots: list[Path]) -> None:
+        if original_parent and original_parent.exists() and directory.name.startswith("ryusync_temp_"):
             logging.info(f"Cleaning up temporary directory {directory.name}")
             try:
-                # Move processed contents back to the original parent directory
                 for item in directory.iterdir():
                     target_path = original_parent / item.name
                     counter = 1
-                    # Handle conflicts when moving back
                     while target_path.exists():
                         name, ext = os.path.splitext(item.name)
                         target_path = original_parent / f"{name}_{counter}{ext}"
                         counter += 1
                     safe_move(item, target_path, allowed_roots)
-                    logging.info(
-                        f"Moved processed folder {item.name} to {original_parent}"
-                    )
-
-                # Remove the now-empty temporary directory
+                    logging.info(f"Moved processed folder {item.name} to {original_parent}")
                 safe_rmdir(directory, allowed_roots, directory)
-                logging.info(
-                    f"Successfully removed temporary directory: {directory.name}"
-                )
+                logging.info(f"Successfully removed temporary directory: {directory.name}")
             except Exception as e:
                 logging.error(f"Error during temporary directory cleanup: {e}")
 
-        return summary
+    def process_folder_logic(
+        self, directory: Path, original_parent: Path | None = None
+    ) -> str:
+        """Thread-safe version of directory processing logic without UI operations"""
+        logging.info(f"Worker thread processing directory: {directory}")
 
+        total_files = sum(
+            1 for f in directory.rglob("*")
+            if f.is_file() and f.suffix.lower() in (".nsp", ".xci")
+        )
+        self.progress.emit(str(directory), 0, total_files)
+
+        self._remove_version_tags(directory)
+
+        logging.info("Moving all files to top directory")
+        allowed_roots = [directory]
+        if original_parent:
+            allowed_roots.append(original_parent)
+
+        all_files_at_root, original_subdirs, failed_files, _ = self._flatten_directory(
+            directory, allowed_roots, total_files
+        )
+
+        logging.info("Force removing original subdirectories...")
+        self._remove_original_subdirectories(original_subdirs, allowed_roots, directory)
+
+        logging.info("Processing and organizing files by Title ID or fallback base name")
+        processed_files_count, new_failed_files = self._organize_files_by_group(
+            directory, all_files_at_root, allowed_roots
+        )
+        failed_files.extend(new_failed_files)
+
+        summary = self._generate_summary_and_counts(directory, processed_files_count, failed_files)
+
+        self.progress.emit(str(directory), total_files, total_files)
+
+        if original_parent:
+            self._cleanup_temp_directory(directory, original_parent, allowed_roots)
+
+        return summary
     def _apply_renaming_rules(self, filename: str) -> str:
         """
         Thread-safe version of apply_renaming_rules, ensuring hex IDs are preserved.
