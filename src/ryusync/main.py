@@ -2667,7 +2667,7 @@ class DragDropWindow(QMainWindow):
         )
         self.stacked_widget.setCurrentWidget(self.summary_widget)
 
-    def _on_worker_finished_folder(self, folder_path):
+    def _on_worker_finished_folder(self, _folder_path):
         # Called after each folder is processed
         self.is_processing = False
 
