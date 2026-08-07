@@ -493,6 +493,12 @@ def find_dlc_parent_folder(dlc_file, game_folders_dict):
     return best_match_folder
 
 
+def is_cli_directory_safe(resolved_path: str) -> bool:
+    """Return True when a CLI directory path is under ~ or /Volumes."""
+    safe_prefixes = (os.path.expanduser("~"), "/Volumes")
+    return resolved_path.startswith(safe_prefixes)
+
+
 def reset_counters() -> None:
     """Reset all counters to empty lists"""
     try:
@@ -5996,8 +6002,7 @@ def main() -> None:
 
         # Validate that the resolved path is under a safe prefix to prevent
         # path traversal via command-line arguments.
-        safe_prefixes = (os.path.expanduser("~"), "/Volumes")
-        if not resolved_path.startswith(safe_prefixes):
+        if not is_cli_directory_safe(resolved_path):
             logging.error(f"Security Error: Directory path is outside safe directories: {directory_path}")
         elif Path(resolved_path).is_dir():
             # Add to processed directories to prevent reprocessing
