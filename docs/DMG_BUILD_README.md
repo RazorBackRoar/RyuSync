@@ -1,25 +1,21 @@
 # RyuSync DMG Build
 
-Shared reference: [Docs/dmg_build_guide.md](/Users/home/Workspace/Apps/Docs/dmg_build_guide.md)
+## Quick build
 
-## Canonical command
-
-From `/Users/home/Workspace/Apps`:
-
-```bash
-uv run --project .razorcore razorbuild RyuSync
-```
-
-If `razorbuild` is already on your `PATH`:
+From the RyuSync repository root:
 
 ```bash
 razorbuild RyuSync
+# Output: dist/RyuSync.dmg
 ```
 
 ## Repo-specific inputs
 
-- [RyuSync.spec](/Users/home/Workspace/Apps/RyuSync/RyuSync.spec)
-- Bundled icons and images under [resources/](/Users/home/Workspace/Apps/RyuSync/resources/)
+| Path | Purpose |
+|------|---------|
+| `RyuSync.spec` | PyInstaller entry point, `datas`, PySide6 hidden imports |
+| `resources/` | Bundled icons and images |
+| `src/ryusync/app_resources.py` | Runtime asset resolution (absolute imports required) |
 
 ## Output
 
@@ -29,6 +25,14 @@ dist/RyuSync.dmg
 
 ## Troubleshooting
 
-- If packaging fails, inspect `RyuSync.spec` first — entry point, `datas`, and PySide6 hidden imports.
-- If icons are missing at runtime, verify `resources/` paths match [app_resources.py](/Users/home/Workspace/Apps/RyuSync/src/ryusync/app_resources.py).
-- Archive extraction requires `unar` on the target Mac (`brew install unar`); it is not bundled inside the app.
+| Symptom | What to try |
+|---------|-------------|
+| Packaging fails | Inspect `RyuSync.spec` — entry point, `datas`, hidden imports |
+| Missing icons at runtime | Verify `resources/` paths match `app_resources.py` |
+| Archive extraction fails on user Mac | `unar` is not bundled — `brew install unar` |
+| `razorcore` not found locally | Standalone: `uv sync` + `ci/vendor/`; workspace: `../.razorcore` |
+
+## Related docs
+
+- [BUILD_AND_RELEASE.md](../BUILD_AND_RELEASE.md)
+- [docs/ARCHITECTURE.md](ARCHITECTURE.md)
