@@ -26,7 +26,13 @@ uv sync
 ```
 
 In the RazorBackRoar workspace layout, `Apps/.razorcore` is an editable sibling
-dependency providing shared `razorcore` tooling.
+dependency. Standalone clones install `razorcore` from the pinned wheel in
+`ci/vendor/` (see [ci/vendor/README.md](ci/vendor/README.md)).
+
+| Layout | razorcore source |
+|--------|------------------|
+| Standalone `git clone` | `uv sync` → `ci/vendor/` wheel |
+| Apps workspace | editable `../.razorcore` overlay |
 
 ## Development Build
 
@@ -86,6 +92,8 @@ RazorBackRoar apps.
 
 ## Related Docs
 
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- [docs/DMG_BUILD_README.md](docs/DMG_BUILD_README.md)
 - [README.md](README.md) — product overview
 - [CONTRIBUTING.md](CONTRIBUTING.md) — PR workflow
 - [SECURITY.md](SECURITY.md) — vulnerability reporting
