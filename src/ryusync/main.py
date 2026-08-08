@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/Users/home/.local/bin/python3.14
 
 import filecmp
 import importlib
