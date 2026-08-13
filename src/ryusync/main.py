@@ -1212,7 +1212,6 @@ def should_clean_file(file_path: Path) -> bool:
         "thumbs.db",
         ".ds_store",
         "icon\r",
-        "icon\015",
     }
     if name_lower in unwanted_filenames or name_lower.startswith("icon"):
         return True
@@ -1240,6 +1239,24 @@ def is_path_safe_for_deletion(path: Path, directory: Path) -> bool:
         return resolved_path == resolved_dir or resolved_dir in resolved_path.parents
     except OSError:
         return False
+
+
+def is_allowed_cli_directory(path: str | Path) -> bool:
+    """True when a CLI-provided directory is under ~ or a /Volumes mount."""
+    try:
+        resolved = Path(path).expanduser().resolve(strict=False)
+    except OSError:
+        return False
+
+    home = Path.home().resolve()
+    if resolved == home or home in resolved.parents:
+        return True
+
+    volumes = Path("/Volumes")
+    if volumes.exists() and (resolved == volumes or volumes in resolved.parents):
+        return True
+
+    return False
 
 
 def safe_move(src: Path, dst: Path, allowed_roots: list[Path]) -> None:
@@ -1778,7 +1795,10 @@ class FolderProcessingWorker(BaseWorker):
                     counter = 1
                     original_target_name = target_path.name
                     while target_path.exists():
-                        name, ext = Path(original_target_name).stem, Path(original_target_name).suffix
+                        name, ext = (
+                            Path(original_target_name).stem,
+                            Path(original_target_name).suffix,
+                        )
                         target_path = directory / f"{name}_{counter}{ext}"
                         counter += 1
 
@@ -1965,7 +1985,10 @@ class FolderProcessingWorker(BaseWorker):
                             logging.warning(
                                 f"Different file with same name exists at {final_target_path.relative_to(directory)}. Appending _{counter}."
                             )
-                            name, ext = Path(original_target_name).stem, Path(original_target_name).suffix
+                            name, ext = (
+                                Path(original_target_name).stem,
+                                Path(original_target_name).suffix,
+                            )
                             final_target_path = (
                                 final_target_path.parent / f"{name}_{counter}{ext}"
                             )
@@ -1974,7 +1997,10 @@ class FolderProcessingWorker(BaseWorker):
                         logging.error(
                             f"Error comparing file {filename} with {final_target_path}: {cmp_error}. Attempting rename."
                         )
-                        name, ext = Path(original_target_name).stem, Path(original_target_name).suffix
+                        name, ext = (
+                            Path(original_target_name).stem,
+                            Path(original_target_name).suffix,
+                        )
                         final_target_path = (
                             final_target_path.parent / f"{name}_{counter}{ext}"
                         )
@@ -1983,7 +2009,10 @@ class FolderProcessingWorker(BaseWorker):
                         logging.error(
                             f"Unexpected error during file comparison for {filename}: {e}. Attempting rename."
                         )
-                        name, ext = Path(original_target_name).stem, Path(original_target_name).suffix
+                        name, ext = (
+                            Path(original_target_name).stem,
+                            Path(original_target_name).suffix,
+                        )
                         final_target_path = (
                             final_target_path.parent / f"{name}_{counter}{ext}"
                         )
@@ -2893,7 +2922,6 @@ class DragDropWindow(QMainWindow):
 
     def dragLeaveEvent(self, event) -> None:
         """Handle drag leave event"""
-        pass
 
     def dropEvent(self, event) -> None:
         """Handle dropped files/folders with strict path safety.
@@ -3354,7 +3382,10 @@ class DragDropWindow(QMainWindow):
                         counter = 1
                         original_target_name = target_path.name
                         while target_path.exists():
-                            name, ext = Path(original_target_name).stem, Path(original_target_name).suffix
+                            name, ext = (
+                                Path(original_target_name).stem,
+                                Path(original_target_name).suffix,
+                            )
                             target_path = directory / f"{name}_{counter}{ext}"
                             counter += 1
 
@@ -3507,7 +3538,10 @@ class DragDropWindow(QMainWindow):
                                 logging.warning(
                                     f"Different file with same name exists at {final_target_path.relative_to(directory)}. Appending _{counter}."
                                 )
-                                name, ext = Path(original_target_name).stem, Path(original_target_name).suffix
+                                name, ext = (
+                                    Path(original_target_name).stem,
+                                    Path(original_target_name).suffix,
+                                )
                                 final_target_path = (
                                     final_target_path.parent / f"{name}_{counter}{ext}"
                                 )
@@ -3516,7 +3550,10 @@ class DragDropWindow(QMainWindow):
                             logging.error(
                                 f"Error comparing file {filename} with {final_target_path}: {cmp_error}. Attempting rename."
                             )
-                            name, ext = Path(original_target_name).stem, Path(original_target_name).suffix
+                            name, ext = (
+                                Path(original_target_name).stem,
+                                Path(original_target_name).suffix,
+                            )
                             final_target_path = (
                                 final_target_path.parent / f"{name}_{counter}{ext}"
                             )
@@ -3525,7 +3562,10 @@ class DragDropWindow(QMainWindow):
                             logging.error(
                                 f"Unexpected error during file comparison for {filename}: {e}. Attempting rename."
                             )
-                            name, ext = Path(original_target_name).stem, Path(original_target_name).suffix
+                            name, ext = (
+                                Path(original_target_name).stem,
+                                Path(original_target_name).suffix,
+                            )
                             final_target_path = (
                                 final_target_path.parent / f"{name}_{counter}{ext}"
                             )
@@ -4420,7 +4460,9 @@ class DragDropWindow(QMainWindow):
                     continue
 
                 # Pre-compute base IDs for efficiency
-                folder1_base_ids = [get_base_id(extract_game_id(f.name)) for f in folder1_files]
+                folder1_base_ids = [
+                    get_base_id(extract_game_id(f.name)) for f in folder1_files
+                ]
 
                 for j in range(i + 1, len(remaining_folders)):
                     folder2 = remaining_folders[j]
@@ -4431,7 +4473,9 @@ class DragDropWindow(QMainWindow):
                     if not folder2_files:
                         continue
 
-                    folder2_base_ids = [get_base_id(extract_game_id(f.name)) for f in folder2_files]
+                    folder2_base_ids = [
+                        get_base_id(extract_game_id(f.name)) for f in folder2_files
+                    ]
 
                     # Check all file combinations for matching IDs
                     match_found = False
@@ -5147,7 +5191,10 @@ class GameOrganizer:
                                 if target_item.exists():
                                     # Handle name conflict
                                     if source_item.is_file() and target_item.is_file():
-                                        base, suffix = target_item.stem, target_item.suffix
+                                        base, suffix = (
+                                            target_item.stem,
+                                            target_item.suffix,
+                                        )
                                         new_name = f"{base}_merged{suffix}"
                                         target_item = target / new_name
                                     elif source_item.is_dir() and target_item.is_dir():
@@ -5161,7 +5208,10 @@ class GameOrganizer:
                                             # Handle name conflicts
                                             counter = 1
                                             while sub_target.exists():
-                                                name_parts = sub_item.stem, sub_item.suffix
+                                                name_parts = (
+                                                    sub_item.stem,
+                                                    sub_item.suffix,
+                                                )
                                                 new_name = f"{name_parts[0]}_merged_{counter}{name_parts[1]}"
                                                 sub_target = target_item / new_name
                                                 counter += 1
@@ -5992,20 +6042,23 @@ def main() -> None:
     # Check if a directory path was provided as an argument
     if len(sys.argv) > 1:
         directory_path = sys.argv[1]
-        resolved_path = os.path.abspath(directory_path)
+        try:
+            resolved = Path(directory_path).expanduser().resolve(strict=False)
+        except OSError:
+            logging.error(f"Invalid directory path: {directory_path}")
+            resolved = None
 
-        # Validate that the resolved path is under a safe prefix to prevent
-        # path traversal via command-line arguments.
-        safe_prefixes = (os.path.expanduser("~"), "/Volumes")
-        if not resolved_path.startswith(safe_prefixes):
-            logging.error(f"Security Error: Directory path is outside safe directories: {directory_path}")
-        elif Path(resolved_path).is_dir():
-            # Add to processed directories to prevent reprocessing
+        if resolved is None:
+            pass
+        elif not is_allowed_cli_directory(resolved):
+            logging.error(
+                f"Security Error: Directory path is outside safe directories: {directory_path}"
+            )
+        elif resolved.is_dir():
+            resolved_path = str(resolved)
             window.processed_directories.add(resolved_path)
-
             logging.info(f"Processing directory from command line: {resolved_path}")
-            window.process_dropped_directory(Path(resolved_path))
-
+            window.process_dropped_directory(resolved)
         else:
             logging.error(f"Invalid directory path: {directory_path}")
 
