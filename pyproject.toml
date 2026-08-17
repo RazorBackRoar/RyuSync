@@ -41,11 +41,11 @@ unresolved-attribute = "ignore"
 
 [dependency-groups]
 dev = [
-    "pyinstaller>=6.0",
+    "pyinstaller>=6.22.0",
     "pytest>=8.4",
     "pytest-cov>=7.1.0",
-    "ruff>=0.15.0",
-    "ty>=0.0.59",
+    "ruff>=0.16.3",
+    "ty>=0.0.71",
 ]
 
 [tool.uv.sources]
