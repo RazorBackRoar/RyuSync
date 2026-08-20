@@ -26,7 +26,7 @@ Cleans titles, tags content as `[GME]`, `[UPD]`, or `[DLC]`, extracts archives i
 - **Content tagging** — labels files `[GME]`, `[UPD]`, or `[DLC]` from title ID metadata
 - **Archive support** — extracts `.rar`, `.zip`, and `.7z` in place via `unar`; originals are preserved
 - **Dry Mode** — previews the full organization plan without modifying files
-- **Persistent settings** — dry-run preference and fuzzy-match threshold stored under Application Support
+- **Persistent settings** — dry-run preference stored under Application Support
 - **Native macOS UI** — dark PySide6 interface with red `#ff2d55` and blue `#00d0ff` brand accents
 - **Apple Silicon native** — arm64 build optimized for M-series Macs
 
@@ -45,8 +45,15 @@ Cleans titles, tags content as `[GME]`, `[UPD]`, or `[DLC]`, extracts archives i
 
 1. Open **RyuSync**
 2. Toggle **Dry Mode** on to preview, or leave it off to organize immediately
-3. Drag a `.nsp`, `.xci`, folder, or archive onto the window
+3. Drag a `.nsp`, `.xci`, folder, or archive onto the window — or pass a folder
+   on the command line: `uv run ryusync /path/to/games`
 4. Review the proposed folder layout and tagged filenames before confirming in Real mode
+
+**Safety:** bulk folder drops on Home, Desktop, or drive roots are blocked. Drop
+a specific game folder or individual files instead.
+
+User data: `~/Library/Application Support/RyuSync/` (`settings.json`, `history/`,
+`logs/`).
 
 ---
 
@@ -101,6 +108,7 @@ uv run pytest tests/ -q
 
 ## Community & docs
 
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — categorization, safety, testing
 - [BUILD_AND_RELEASE.md](BUILD_AND_RELEASE.md) — prerequisites, build, packaging, release, versioning
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how to contribute
 - [SECURITY.md](SECURITY.md) — vulnerability reporting
