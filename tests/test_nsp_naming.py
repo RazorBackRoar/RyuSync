@@ -150,6 +150,11 @@ def test_get_base_name_strips_dlc_descriptors_for_dlc_files(
             "Example Game Title - Pre Order Bonuses DLC [DLC].nsp",
             "Example Game Title Pre Order Bonuses DLC [DLC].nsp",
         ),
+        (
+            "BUBBLE BOBBLE Sugar Dungeons Deluxe Contents [01001C30251DC000][v0][Base].nsp",
+            "Bubble Bobble Sugar Dungeons - Deluxe Contents [01001C30251DC000] [DLC].nsp",
+            "Bubble Bobble Sugar Dungeons Deluxe Contents [01001C30251DC000] [DLC].nsp",
+        ),
     ],
 )
 def test_apply_renaming_rules_on_worker_and_window(

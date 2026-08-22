@@ -165,6 +165,7 @@ DLC_INDICATORS = [
     r"(?i)ticket",
     r"(?i)pass",
     r"(?i)content",
+    r"(?i)contents",
     r"(?i)items",
     r"(?i)set",
     r"(?i)raiment",
@@ -212,6 +213,7 @@ DLC_CONTENT_PATTERNS = [
     "Outfit",
     "Kit",
     "Content",
+    "Contents",
     "Items",
     "Set",
     "Charcuterie",
@@ -3734,6 +3736,7 @@ class DragDropWindow(QMainWindow):
                 r"\s*\[UPD\]",
                 r"\s*\[GME\]",
                 r"\s*\[Base\+DLC\]",
+                r"\s*\[Base\]",
                 r"\s*\[UPDATE\]",
                 r"\s*\[GAME\]",
             ]

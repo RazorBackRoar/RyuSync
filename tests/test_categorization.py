@@ -52,6 +52,11 @@ from ryusync import FileType, categorize_file
             FileType.DLC,
         ),
         ("Game-Pre-Order-Bonus.nsp", FileType.DLC),
+        # Scene "Deluxe Contents" DLC packs can carry [v0], ...000, and [Base].
+        (
+            "BUBBLE BOBBLE Sugar Dungeons Deluxe Contents [01001C30251DC000][v0][Base].nsp",
+            FileType.DLC,
+        ),
     ],
 )
 def test_categorize_file_uses_title_id_suffix(
