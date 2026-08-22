@@ -52,10 +52,27 @@ from ryusync import FileType, categorize_file
             FileType.DLC,
         ),
         ("Game-Pre-Order-Bonus.nsp", FileType.DLC),
-        # Scene "Deluxe Contents" DLC packs can carry [v0], ...000, and [Base].
+        # Scene DLC packs: trailing descriptors beat [v0], ...000, and [Base].
         (
             "BUBBLE BOBBLE Sugar Dungeons Deluxe Contents [01001C30251DC000][v0][Base].nsp",
             FileType.DLC,
+        ),
+        (
+            "Some Game Season Pass [0100ABCDEF120000][v0][Base].nsp",
+            FileType.DLC,
+        ),
+        (
+            "Another Title Extra Contents [0100ABCDEF120000][v0][Base].nsp",
+            FileType.DLC,
+        ),
+        (
+            "Example_game_title_deluxe_edition_bonuses_dlc [0100ABCDEF120000][v0][Base].nsp",
+            FileType.DLC,
+        ),
+        # Base games with edition/deluxe in the title but no trailing DLC descriptors.
+        (
+            "Mario Kart 8 Deluxe [0100ABCDEF120000][v0].nsp",
+            FileType.GAME,
         ),
     ],
 )

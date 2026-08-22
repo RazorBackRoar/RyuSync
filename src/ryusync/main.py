@@ -327,6 +327,31 @@ def split_dlc_name(name: str) -> tuple[list[str], list[str]]:
     return tokens, descriptor_tokens
 
 
+def _stem_for_dlc_descriptor_check(filename: str) -> str:
+    """Strip IDs and scene tags so ``split_dlc_name`` can inspect the title alone."""
+    name = Path(filename).stem
+    name = re.sub(r"\[[0-9A-Fa-f]{16}\]", "", name, flags=re.IGNORECASE)
+    name = re.sub(
+        r"\[(?:v0|base|us|usa|eu|eur|jp|jpn|asia|gme|upd|dlc|update|game|nsp|xci|app)\]",
+        "",
+        name,
+        flags=re.IGNORECASE,
+    )
+    name = re.sub(r"\((?:dlc|update)\)", "", name, flags=re.IGNORECASE)
+    return re.sub(r"[\s_\-]+", " ", name).strip()
+
+
+def _has_trailing_dlc_descriptors(filename: str) -> bool:
+    """True when the title ends with DLC descriptor tokens (e.g. Deluxe Contents).
+
+    Scene DLC packs often carry base-game signals ([v0], ...000, [Base]) while the
+    human-readable title still ends with pack/content words. Descriptor detection
+    runs before those heuristics so future releases classify as [DLC], not [GME].
+    """
+    _, descriptor_tokens = split_dlc_name(_stem_for_dlc_descriptor_check(filename))
+    return bool(descriptor_tokens)
+
+
 def get_log_file_path(filename: str) -> Path:
     """Return a writable log path, preferring Desktop when it exists."""
     desktop = Path.home() / "Desktop"
@@ -555,6 +580,10 @@ def add_file(filename: str, file_type: str, category: str) -> None:
 def _is_dlc_file(filename: str, upper_filename: str, upper_folder: str) -> bool:
     """Helper function to determine if a file is a DLC."""
     if "[DLC]" in upper_filename or "(DLC)" in upper_filename:
+        return True
+
+    # Trailing descriptor words trump scene base-game tags ([v0], ...000, [Base]).
+    if _has_trailing_dlc_descriptors(filename):
         return True
 
     # Check for known DLC hex patterns (e.g., ...1xxx)
@@ -813,6 +842,7 @@ def _get_base_name(filename: str, is_dlc: bool = False) -> str:
             r"\[(US|USA|EUR|JP)\]",
             r"\[APP\]",
             r"\[Base\+DLC\]",
+            r"\[Base\]",
             r"\[Update\]",
             r"\[DLC\]",
             r"\(Update.*?\)",

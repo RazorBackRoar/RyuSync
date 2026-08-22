@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from ryusync.main import split_dlc_name
+from ryusync.main import _has_trailing_dlc_descriptors, split_dlc_name
 
 @pytest.mark.parametrize(
     "name,expected_base,expected_descriptor",
@@ -65,3 +65,22 @@ def test_split_dlc_name_single_token() -> None:
     base_tokens, descriptor_tokens = split_dlc_name("DLC")
     assert base_tokens == ["DLC"]
     assert descriptor_tokens == []
+
+
+@pytest.mark.parametrize(
+    "filename,expected",
+    [
+        (
+            "BUBBLE BOBBLE Sugar Dungeons Deluxe Contents [01001C30251DC000][v0][Base].nsp",
+            True,
+        ),
+        (
+            "Some Game Season Pass [0100ABCDEF120000][v0][Base].nsp",
+            True,
+        ),
+        ("Mario Kart 8 Deluxe [0100ABCDEF120000][v0].nsp", False),
+        ("GRIME Definitive Edition [0100F300169B6000][v65536][US].nsp", False),
+    ],
+)
+def test_has_trailing_dlc_descriptors(filename: str, expected: bool) -> None:
+    assert _has_trailing_dlc_descriptors(filename) is expected

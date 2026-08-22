@@ -38,6 +38,7 @@ Switch-specific filename/path sanitizers stay local (domain logic).
 - Bundled entry must use **absolute** imports (`from ryusync.app_resources import …`). Relative imports crash PyInstaller/DMG launches.
 - Resolve bundled assets via `ryusync.app_resources.get_resource_path`.
 - Preserve Dry Mode semantics (preview without moving) and `[GME]` / `[UPD]` / `[DLC]` tagging.
+- Scene DLC packs often carry base-game scene tags (`[v0]`, `[Base]`, title ID `…000`). When the human-readable title has trailing DLC descriptor tokens (e.g. Deluxe Contents, Season Pass, Pre Order Bonuses), classify as `[DLC]` not `[GME]` — trailing descriptors beat scene base-game signals universally across GME/UPD/DLC.
 - Packaging notes: `docs/DMG_BUILD_README.md`.
 
 ## Verification
