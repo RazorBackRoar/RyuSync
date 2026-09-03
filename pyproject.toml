@@ -33,6 +33,12 @@ addopts = "-ra"
 line-length = 88
 target-version = "py314"
 
+# Pin the historic default set. Ruff 0.16+ enables extra families (I, LOG,
+# BLE, PIE, …) unless select is explicit; do not expand here — main.py is
+# a 6k-line module and is not being reformatted in this pass.
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
 [tool.ty.environment]
 extra-paths = ["src"]
 
