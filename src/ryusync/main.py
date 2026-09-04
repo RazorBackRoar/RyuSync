@@ -1244,8 +1244,9 @@ def should_clean_file(file_path: Path) -> bool:
         "thumbs.db",
         ".ds_store",
         "icon\r",
+        "icon\015",
     }
-    if name_lower in unwanted_filenames or name_lower.startswith("icon"):
+    if name_lower in unwanted_filenames:
         return True
     return False
 
@@ -1570,9 +1571,9 @@ class FolderProcessingWorker(BaseWorker):
     finished_folder = Signal(str)  # folder path when done
     file_counts = Signal(dict)  # dictionary of file counts for updating global counters
 
-    def __init__(self, folder_queue, parent=None):
+    def __init__(self, folder_queue=None, parent=None):
         super().__init__(parent)
-        self.folder_queue = folder_queue
+        self.folder_queue = folder_queue if folder_queue is not None else queue.Queue()
         self.game_organizer = GameOrganizer()  # Create own instance for thread safety
         self._extraction_errors: list[str] = []
 
@@ -1824,6 +1825,21 @@ class FolderProcessingWorker(BaseWorker):
                 target_path = directory / file
 
                 try:
+                    if target_path.exists():
+                        try:
+                            if filecmp.cmp(
+                                str(file_path), str(target_path), shallow=False
+                            ):
+                                logging.info(
+                                    f"Skipping identical duplicate file during flatten: {file_path.name}"
+                                )
+                                safe_unlink(file_path, allowed_roots, directory)
+                                continue
+                        except OSError as cmp_err:
+                            logging.debug(
+                                f"Could not compare files during flatten: {cmp_err}"
+                            )
+
                     counter = 1
                     original_target_name = target_path.name
                     while target_path.exists():
@@ -2060,6 +2076,21 @@ class FolderProcessingWorker(BaseWorker):
                         f"Moved {filename} -> {final_target_path.relative_to(directory)}"
                     )
                 elif is_duplicate:
+                    # An identical duplicate already exists at final_target_path.
+                    # Remove the source file so it doesn't linger orphaned at root.
+                    if (
+                        file_path.exists()
+                        and file_path.resolve() != final_target_path.resolve()
+                    ):
+                        try:
+                            safe_unlink(file_path, allowed_roots, directory)
+                            logging.info(
+                                f"Removed identical duplicate source file: {file_path}"
+                            )
+                        except OSError as del_err:
+                            logging.warning(
+                                f"Could not remove duplicate source file {file_path}: {del_err}"
+                            )
                     processed_files_count += 1
             except Exception as e:
                 logging.error(f"Error moving file {filename} to {target_path}: {e}")
@@ -3333,383 +3364,14 @@ class DragDropWindow(QMainWindow):
                 self.stacked_widget.setCurrentWidget(self.summary_widget)
                 return preview_text
 
-            self.processed_files = 0
-            failed_files = []
             self.last_processed_directory = directory
 
-            # --- Optional: Keep version removal from folders ---
-            # (This part seems okay, can be kept or removed based on preference)
-            for folder in directory.iterdir():
-                if folder.is_dir():
-                    has_upd = any(
-                        "[UPD]" in f.name for f in folder.glob("*") if f.is_file()
-                    )
-                    if has_upd:
-                        remove_versions_from_path(folder)
-                        logging.info(f"Processed version tags in folder: {folder.name}")
-            # --- End Optional Part ---
-
-            # Step 2: Move all files to top level directory
-            logging.info("Moving all files to top directory")
-            all_files_at_root = []  # Store Path objects of files moved to root
-            original_subdirs = [
-                d for d in directory.iterdir() if d.is_dir()
-            ]  # List dirs before moving
-
-            allowed_roots = [directory]
-
-            for root, _, files in os.walk(
-                str(directory), topdown=False
-            ):  # topdown=False helps with deleting dirs later
-                root_path = Path(root)
-                if root_path == directory:
-                    # Add files already at the root
-                    for file in files:
-                        file_lower = file.lower()
-                        root_file = directory / file
-                        if file_lower.endswith((".nsp", ".xci")):
-                            all_files_at_root.append(root_file)
-                        elif should_clean_file(root_file):
-                            # Clean junk (.url/.URL, OS metadata) sitting at the
-                            # root of the processing folder too — e.g. a .URL file
-                            # extracted from a dropped .nsp.rar or sitting beside it.
-                            try:
-                                safe_unlink(root_file, allowed_roots, directory)
-                                logging.info(
-                                    f"Deleted URL/metadata shortcut file: {root_file}"
-                                )
-                            except OSError as e:
-                                logging.warning(
-                                    f"Could not remove URL/metadata shortcut file {root_file}: {e}"
-                                )
-                        else:
-                            logging.info(
-                                f"Skipped unrelated non-game file: {root_file}"
-                            )
-                    continue  # Skip processing root further in this loop
-
-                for file in files:
-                    file_path = root_path / file
-                    if not file.lower().endswith((".nsp", ".xci")):
-                        # Handle non-game files (e.g., delete .url/.URL or OS metadata files)
-                        if should_clean_file(file_path):
-                            try:
-                                safe_unlink(file_path, allowed_roots, directory)
-                                logging.info(
-                                    f"Deleted URL/metadata shortcut file: {file_path}"
-                                )
-                            except OSError as e:
-                                logging.warning(
-                                    f"Could not remove URL/metadata shortcut file {file_path}: {e}"
-                                )
-                        else:
-                            logging.info(
-                                f"Skipped unrelated non-game file: {file_path}"
-                            )
-                        continue
-
-                    target_path = directory / file
-
-                    try:
-                        counter = 1
-                        original_target_name = target_path.name
-                        while target_path.exists():
-                            name, ext = (
-                                Path(original_target_name).stem,
-                                Path(original_target_name).suffix,
-                            )
-                            target_path = directory / f"{name}_{counter}{ext}"
-                            counter += 1
-
-                        safe_move(file_path, target_path, allowed_roots)
-                        all_files_at_root.append(target_path)  # Add the Path object
-                    except Exception as e:
-                        logging.error(f"Error moving file {file_path}: {e}")
-                        failed_files.append(str(file_path))
-
-            # Step 3: Force remove original subdirectories after flattening
-            logging.info("Force removing original subdirectories...")
-            for item in original_subdirs:
-                try:
-                    if (
-                        item.exists() and item.is_dir()
-                    ):  # Check if it still exists before attempting removal
-                        remove_empty_directories(item, allowed_roots, directory)
-                except Exception as e:
-                    logging.error(
-                        f"Error removing original directory {item.name}: {e}"
-                    )  # Log error but continue
-
-            # Step 4: Process and organize files based on Title ID
-            logging.info("Processing and organizing files by Title ID")
-            game_id_to_folder_path: dict[
-                str, Path
-            ] = {}  # Maps base_id to canonical folder Path
-            game_id_to_best_name: dict[
-                str, str
-            ] = {}  # Maps base_id to preferred folder name
-            total_files = len(all_files_at_root)
-
-            # First pass: Identify base IDs and best names
-            logging.info("First pass: Identifying base IDs and best names...")
-            for file_path in all_files_at_root:
-                if not file_path.exists():
-                    continue  # Skip if moved/deleted
-
-                filename = file_path.name
-                full_id = extract_game_id(filename)
-                base_id = get_base_id(full_id)
-
-                if not base_id:
-                    logging.warning(
-                        f"Could not extract base ID from {filename}. Skipping."
-                    )
-                    # Optionally move to an "Unknown" folder
-                    unknown_folder = directory / "_UNKNOWN_ID"
-                    safe_mkdir(unknown_folder, allowed_roots, exist_ok=True)
-                    try:
-                        safe_move(file_path, unknown_folder / filename, allowed_roots)
-                    except Exception as e:
-                        logging.error(
-                            f"Could not move file with unknown ID {filename}: {e}"
-                        )
-                    continue
-
-                # Categorize before cleaning so DLC descriptors can be stripped
-                file_type = categorize_file(filename)
-                is_dlc = file_type == FileType.DLC
-
-                # Determine a clean base name from this file
-                current_clean_name = get_clean_base_name(filename, is_dlc=is_dlc)
-
-                # Prefer names from GME/UPD files over DLC files for the folder name
-                is_preferred_source = (
-                    file_type == FileType.GAME or file_type == FileType.UPDATE
-                )
-
-                # Update the best name for this base_id if this one is better
-                if base_id not in game_id_to_best_name or is_preferred_source:
-                    # Basic sanitization for folder name
-                    folder_name_candidate = re.sub(
-                        r'[<>:"/\\|?*]', "_", current_clean_name
-                    )
-                    folder_name_candidate = folder_name_candidate.strip()
-                    if folder_name_candidate:  # Ensure not empty
-                        game_id_to_best_name[base_id] = folder_name_candidate
-
-            # Second pass: Always create a folder for each game and move the file inside
-            logging.info("Second pass: Creating folders and moving files...")
-            processed_files_count = 0
-            processed_files = 0
-            for file_path in all_files_at_root:
-                if not file_path.exists():
-                    continue  # Skip if already moved or deleted
-
-                filename = file_path.name
-                full_id = extract_game_id(filename)
-                base_id = get_base_id(full_id)
-
-                if not base_id or base_id not in game_id_to_best_name:
-                    # Already handled (moved to Unknown or logged) in first pass
-                    continue
-
-                # Always create a folder named after the cleaned game name
-                canonical_folder_name = self.game_organizer.sanitize_filename(
-                    game_id_to_best_name[base_id]
-                )
-                canonical_folder_name = canonical_folder_name.rstrip(".")
-                canonical_folder_name = smart_title_case(
-                    restore_roman_numerals(canonical_folder_name)
-                )
-                game_folder = directory / canonical_folder_name
-                safe_mkdir(game_folder, allowed_roots, exist_ok=True)
-                game_id_to_folder_path[base_id] = game_folder
-
-                # Apply final renaming rules to the file
-                renamed_file = self.apply_renaming_rules(filename)
-
-                # Determine category based on tags in the *renamed* file
-                if "[DLC]" in renamed_file.upper():
-                    category = "dlc"
-                elif "[UPD]" in renamed_file.upper():
-                    category = "upd"
-                else:  # Assume GME otherwise
-                    category = "gme"
-
-                # Always move into game_folder (DLCs in game_folder/DLC)
-                if category == "dlc":
-                    dlc_folder = game_folder / "DLC"
-                    safe_mkdir(dlc_folder, allowed_roots, exist_ok=True)
-                    target_path = dlc_folder / renamed_file
-                else:
-                    target_path = game_folder / renamed_file
-
-                # Move file to final location, handle conflicts
-                try:
-                    counter = 1
-                    original_target_name = target_path.name
-                    final_target_path = target_path
-                    is_duplicate = False
-                    while final_target_path.exists():
-                        if file_path.resolve() == final_target_path.resolve():
-                            logging.warning(
-                                f"Source and target are the same file, skipping move: {file_path}"
-                            )
-                            is_duplicate = True
-                            break
-                        try:
-                            if filecmp.cmp(
-                                str(file_path), str(final_target_path), shallow=False
-                            ):
-                                logging.warning(
-                                    f"Identical file already exists at {final_target_path.relative_to(directory)}. Skipping move for duplicate source: {filename}"
-                                )
-                                is_duplicate = True
-                                break
-                            else:
-                                logging.warning(
-                                    f"Different file with same name exists at {final_target_path.relative_to(directory)}. Appending _{counter}."
-                                )
-                                name, ext = (
-                                    Path(original_target_name).stem,
-                                    Path(original_target_name).suffix,
-                                )
-                                final_target_path = (
-                                    final_target_path.parent / f"{name}_{counter}{ext}"
-                                )
-                                counter += 1
-                        except OSError as cmp_error:
-                            logging.error(
-                                f"Error comparing file {filename} with {final_target_path}: {cmp_error}. Attempting rename."
-                            )
-                            name, ext = (
-                                Path(original_target_name).stem,
-                                Path(original_target_name).suffix,
-                            )
-                            final_target_path = (
-                                final_target_path.parent / f"{name}_{counter}{ext}"
-                            )
-                            counter += 1
-                        except Exception as e:
-                            logging.error(
-                                f"Unexpected error during file comparison for {filename}: {e}. Attempting rename."
-                            )
-                            name, ext = (
-                                Path(original_target_name).stem,
-                                Path(original_target_name).suffix,
-                            )
-                            final_target_path = (
-                                final_target_path.parent / f"{name}_{counter}{ext}"
-                            )
-                            counter += 1
-                    if (
-                        not is_duplicate
-                        and file_path.exists()
-                        and file_path.resolve() != final_target_path.resolve()
-                    ):
-                        safe_move(file_path, final_target_path, allowed_roots)
-                        processed_files_count += 1
-                        processed_files += 1
-                        logging.debug(
-                            f"Moved {filename} -> {final_target_path.relative_to(directory)}"
-                        )
-                        # Update progress periodically (every 3 files)
-                        if processed_files % 3 == 0:
-                            self._report_processing_progress(
-                                directory, processed_files, total_files
-                            )
-                    elif is_duplicate:
-                        processed_files_count += 1
-                        processed_files += 1
-                except Exception as e:
-                    logging.error(f"Error moving file {filename} to {target_path}: {e}")
-                    failed_files.append(filename)
-
-            self.processed_files = processed_files_count  # Update count
-
-            # Step 5: Remove or disable the problematic merge function call
-            # REMOVE THIS CALL: self._merge_related_game_folders(directory) # Already removed/commented
-            logging.info("Skipping problematic _merge_related_game_folders step.")
-
-            # Step 6: Disable possessive/fuzzy folder consolidation to prevent incorrect merges
-            logging.info(
-                "Skipping possessive/fuzzy folder consolidation step to prioritize Title ID grouping."
-            )
-            # self.game_organizer.consolidate_apostrophe_folders(str(directory)) # DISABLED
-
-            # Step 7: Disable folder structure fixing to prevent incorrect merges
-            logging.info(
-                "Skipping folder structure fixing step to prioritize Title ID grouping."
-            )
-            # fix_folder_structure(directory) # DISABLED
-
-            # --- NEW STEP 7.25: Merge folders by base ID (consolidate duplicates) ---
-            try:
-                merge_folders_by_base_id(directory)
-            except Exception as e:
-                logging.error(f"Error during folder merge: {e}")
-                self.log_failure(f"Error during folder merge step: {e!s}")
-
-            # --- NEW STEP 7.5: Standardize filenames to match folder names ---
-            try:
-                standardize_filenames_to_folder(directory)
-            except Exception as e:
-                logging.error(f"Error during filename standardization: {e}")
-                self.log_failure(f"Error during filename standardization step: {e!s}")
-            # --- END NEW STEP ---
-
-            # Step 8: Final cleanup of unwanted files (like .DS_Store potentially created)
-            self.remove_unwanted_files(str(directory))
-            self._report_processing_progress(directory, total_files, total_files)
-
-            # Step 9: Remove empty game folders (excluding _UNKNOWN_ID) - Refined Check
-            logging.info("Removing empty game folders (final check)...")
-            for item in list(directory.iterdir()):  # Iterate over a copy
-                if item.is_dir() and item.name != "_UNKNOWN_ID":
-                    is_truly_empty = True
-                    dlc_subfolder_path = item / "DLC"
-                    has_dlc_subfolder = dlc_subfolder_path.is_dir()
-                    # Check for files directly within the item folder, ignoring the DLC subfolder itself
-                    contains_files_directly = any(f.is_file() for f in item.iterdir())
-
-                    if contains_files_directly:
-                        is_truly_empty = False
-                    elif has_dlc_subfolder:
-                        # Check if DLC subfolder has files
-                        if any(dlc_subfolder_path.iterdir()):
-                            is_truly_empty = False
-                        # Check if there are other items besides the (potentially empty) DLC folder
-                        elif len(list(item.iterdir())) > 1:
-                            is_truly_empty = (
-                                False  # Contains other things (like other folders)
-                            )
-                    elif any(f.is_dir() and f.name != "DLC" for f in item.iterdir()):
-                        # Contains other subdirectories besides potentially DLC
-                        is_truly_empty = False
-                    # If it only contained an empty DLC folder, is_truly_empty remains True
-
-                    if is_truly_empty:
-                        try:
-                            remove_empty_directories(item, allowed_roots, directory)
-                        except Exception as e:
-                            logging.error(
-                                f"Error removing final empty game folder {item.name}: {e}"
-                            )
-
-            # Step 10: Update counters and generate summary (use the existing logic)
-            logging.info("Updating final file counts for summary...")
-            self._update_file_counts_after_merge(
-                directory
-            )  # Update counts based on final state
-
-            # FINAL POLISH: Standardize filenames to match folder names
-            standardize_filenames_to_folder(directory)
-
-            success_count = self.processed_files
-            summary = self.generate_file_summary(success_count, failed_files)
-
+            worker = FolderProcessingWorker()
+            worker.file_counts.connect(self._on_worker_file_counts)
+            summary = worker.process_folder_logic(directory)
+            self.last_processed_directory = directory
             self.summary_widget.setText(summary)
-
+            self.stacked_widget.setCurrentWidget(self.summary_widget)
             return summary
 
         except Exception as e:
@@ -3728,171 +3390,9 @@ class DragDropWindow(QMainWindow):
             return f"Error processing directory: {readable_error}"
 
     def apply_renaming_rules(self, filename: str) -> str:
-        """Apply comprehensive renaming rules with improved UPD detection"""
-        try:
-            # Get original extension
-            original_ext = Path(filename).suffix.lower()
-
-            # Clean up the filename while preserving original for categorization
-            name_to_clean = Path(filename).stem
-            name_to_clean = re.sub(r"®", "", name_to_clean)
-
-            # Determine file type based on ORIGINAL name BEFORE cleaning versions
-            file_type = categorize_file(
-                filename
-            )  # Use original name for categorization
-
-            # --- Extract Hex ID with high precision ---
-            hex_id = ""
-            hex_match = re.search(r"\[([0-9A-Fa-f]{16})\]", name_to_clean)
-            if hex_match:
-                hex_id = hex_match.group(0)
-                name_to_clean = name_to_clean.replace(hex_id, " __HEXID__ ")
-
-            # --- Define Cleaning Patterns ---
-            # Patterns to remove regardless of file type
-            patterns_to_remove_always = [
-                r"\([a-z0-9][\w\-]*\.[a-z]{2,4}\)",
-                r"\s*\[(us|usa|eu|eur|jp|jpn|asia|as|chn|kor|tw|hk|roc)\]",
-                r"\s*\((us|usa|eu|eur|jp|jpn|asia|as|chn|kor|tw|hk|roc)\)",
-                r"\(eShop\)",
-                r"\(NSP\)",
-                r"\[NSP\]",
-                r"\[XCI\]",
-                r"\[APP\]",
-                # Remove explicit type tags - they will be re-added based on categorization
-                r"\s*\[Update\]",
-                r"\s*\[DLC\]",
-                r"\s*\[UPD\]",
-                r"\s*\[GME\]",
-                r"\s*\[Base\+DLC\]",
-                r"\s*\[Base\]",
-                r"\s*\[UPDATE\]",
-                r"\s*\[GAME\]",
-            ]
-
-            # Patterns for version strings (only applied to non-DLC)
-            patterns_to_remove_versions = [
-                r"\s*\b[vV](?:er(?:sion)?)?\.?\s*\d+[\w\.\-]*",  # v1, v1.1, ver1.0, version 2.0b etc. (requires word boundary)
-                r"(?<=\w)[vV][\d\.]+(?:[a-zA-Z]*\d*)",  # Version attached to word with no space (GameV1.0.3)
-                r"\s+\b[fF]\d+\b",  # f33, F33 (requires preceding space to avoid stripping names like F1)
-                r"\s*\b(?:Update|Patch|Revision)(?![a-zA-Z])\s*[\w\d\.\-]*",  # Update 1.0.6, Patch 1.1 etc.
-                r"\s*\((?:Update|Patch|Revision)(?![a-zA-Z])\s*[\w\d\.\-]*\s*\)",  # (Update/Patch)
-                r"\s*\[(?:Update|Patch|Revision)(?![a-zA-Z])\s*[\w\d\.\-]*\s*\]",  # [Update/Patch]
-                r"\s*\(v\d+[\w\.\-]*\)",  # (v1), (v2.1)
-                r"\s*\[v\d+[\w\.\-]*\]",  # [v1], [v1.2]
-                # Enhanced version patterns for bracketed version numbers
-                r"\s*\[(?!\s*[0-9A-Fa-f]{16}\s*\])[0-9\.\-]+\]",  # [1.0.6], [262144], [524288]
-                r"\s*\[(?!\s*[0-9A-Fa-f]{16}\s*\])[\w\d\.\-]+\]",  # Catch any remaining bracketed version-like strings
-            ]
-
-            # --- Apply Cleaning ---
-            cleaned_name = name_to_clean
-            # Apply universal cleaning
-            for pattern in patterns_to_remove_always:
-                cleaned_name = re.sub(pattern, "", cleaned_name, flags=re.IGNORECASE)
-
-            # Conditionally apply version cleaning based on file type
-            if file_type != FileType.DLC:
-                for pattern in patterns_to_remove_versions:
-                    cleaned_name = re.sub(
-                        pattern, "", cleaned_name, flags=re.IGNORECASE
-                    )
-
-            # --- Handle DLC Descriptions (Extract after cleaning non-version tags) ---
-            dlc_desc = ""
-            # Use specific known DLC content patterns first
-            dlc_content_regex = "|".join([re.escape(p) for p in DLC_CONTENT_PATTERNS])
-            desc_match = re.search(
-                rf"\[\s*(.*?({dlc_content_regex}).*?)\s*\]", cleaned_name, re.IGNORECASE
-            )
-            if desc_match:
-                dlc_desc = desc_match.group(0)
-                cleaned_name = cleaned_name.replace(dlc_desc, "")
-            else:
-                # Fallback check for any bracket content with DLC indicators
-                bracket_matches = re.findall(r"(\[[^\]]+?\])", cleaned_name)
-                for bracket_content in bracket_matches:
-                    if any(
-                        re.search(
-                            rf"\b{ind.replace(r'(?i)', '')}\b",
-                            bracket_content,
-                            re.IGNORECASE,
-                        )
-                        for ind in DLC_INDICATORS
-                    ):
-                        dlc_desc = bracket_content
-                        cleaned_name = cleaned_name.replace(dlc_desc, "")
-                        break
-
-            # Final cleanup
-            base_name = re.sub(r"\s+", " ", cleaned_name).strip()
-            if hex_id:
-                base_name = base_name.replace("__HEXID__", "").strip()
-
-            # Specifically remove [v0] for DLC files after other cleaning
-            if file_type == FileType.DLC:
-                base_name = re.sub(
-                    r"\s*\[v0\]", "", base_name, flags=re.IGNORECASE
-                ).strip()
-
-            base_name = sanitize_possessive(base_name) or "Unknown Game"
-
-            # For DLC files, strip leading release tags and trailing descriptors
-            # (e.g. "deluxe edition bonuses dlc") from the base name so the same game's
-            # DLCs group together, and keep the descriptor for the filename.
-            if file_type == FileType.DLC:
-                base_name = strip_leading_v(base_name)
-                base_tokens, desc_tokens = split_dlc_name(base_name)
-                base_name = " ".join(base_tokens)
-                if desc_tokens and not dlc_desc:
-                    dlc_desc = re.sub(
-                        r"(?i)\bdlc\b", "DLC", " ".join(desc_tokens).title()
-                    )
-
-            # Convert base_name to title case
-            base_name = base_name.title()
-
-            # --- Determine Final Tag ---
-            # Map FileType enum to the correct abbreviated tags
-            file_type_tag_map = {
-                FileType.GAME: "[GME]",
-                FileType.UPDATE: "[UPD]",
-                FileType.DLC: "[DLC]",
-            }
-
-            tag = file_type_tag_map.get(file_type, "[GME]")
-
-            # Special case for Base+DLC
-            if "[Base+DLC]" in filename.upper():
-                tag = "[Base+DLC]"
-
-            # --- Construct Final Name ---
-            final_name_parts = [base_name]
-            if dlc_desc and dlc_desc not in base_name:
-                final_name_parts.append(dlc_desc.strip())
-            if hex_id:
-                final_name_parts.append(hex_id)
-            final_name_parts.append(tag)
-
-            final_name = (
-                " ".join(part for part in final_name_parts if part).strip()
-                + original_ext
-            )
-
-            # Remove any remaining empty brackets and clean up double spaces
-            final_name = re.sub(r"\[\s*\]", "", final_name)
-            final_name = re.sub(r"\(\s*\)", "", final_name)
-            final_name = re.sub(r"\s+", " ", final_name)
-
-            return sanitize_path_component(
-                final_name, default="Unknown Game", preserve_extension=True
-            )
-        except Exception as e:
-            logging.error(
-                f"Error applying renaming rules to '{filename}': {e}", exc_info=True
-            )
-            return filename
+        """Apply comprehensive renaming rules using worker's canonical implementation."""
+        worker = FolderProcessingWorker()
+        return worker._apply_renaming_rules(filename)
 
     def count_dlc_files(self, directory: str) -> int:
         """Count DLC files recursively in directory"""
@@ -3971,252 +3471,8 @@ class DragDropWindow(QMainWindow):
             return False
 
     def organize_dlc_folders(self, directory: str) -> None:
-        """Organize DLC into proper subfolders."""
-        try:
-            # Get a list of all game folders (excluding any standalone DLC folders)
-            game_folders = []
-            for folder_path in Path(directory).iterdir():
-                if folder_path.is_dir() and folder_path.name != "DLC":
-                    game_folders.append(folder_path)
-
-            if not game_folders:
-                logging.info("No game folders found for DLC organization")
-                return
-
-            # First, handle loose DLC files in the root directory
-            for file_path in Path(directory).glob("*[DLC]*.nsp"):
-                if file_path.is_file() and "[DLC]" in file_path.name:
-                    # Find the most likely parent game folder using ID-based matching
-                    parent_folder = find_dlc_parent_folder(file_path.name, game_folders)
-
-                    if parent_folder:
-                        # Create DLC folder in the parent game folder if it doesn't exist
-                        dlc_folder = parent_folder / "DLC"
-                        dlc_folder.mkdir(exist_ok=True)
-
-                        # Move DLC file to the parent folder's DLC folder
-                        target_path = dlc_folder / file_path.name
-
-                        # Handle name conflicts
-                        counter = 1
-                        orig_name = target_path.name
-                        while target_path.exists():
-                            name, ext = Path(orig_name).stem, Path(orig_name).suffix
-                            target_path = dlc_folder / f"{name}_{counter}{ext}"
-                            counter += 1
-
-                        try:
-                            shutil.move(str(file_path), str(target_path))
-                            logging.info(
-                                f"Moved DLC file: {file_path.name} to {target_path}"
-                            )
-                        except Exception as e:
-                            logging.error(
-                                f"Error moving DLC file {file_path.name}: {e}"
-                            )
-                    else:
-                        # No matching game folder found, create a temporary DLC folder in the root
-                        dlc_root = Path(directory) / "DLC"
-                        dlc_root.mkdir(exist_ok=True)
-                        target_path = dlc_root / file_path.name
-
-                        # Handle name conflicts
-                        counter = 1
-                        orig_name = target_path.name
-                        while target_path.exists():
-                            name, ext = Path(orig_name).stem, Path(orig_name).suffix
-                            target_path = dlc_root / f"{name}_{counter}{ext}"
-                            counter += 1
-
-                        try:
-                            shutil.move(str(file_path), str(target_path))
-                            logging.info(
-                                f"Moved DLC file to root DLC folder: {file_path.name}"
-                            )
-                        except Exception as e:
-                            logging.error(
-                                f"Error moving DLC file {file_path.name}: {e}"
-                            )
-
-            # Second, handle standalone DLC folders (folders that only contain DLC files)
-            for game_dir in Path(directory).iterdir():
-                if not game_dir.is_dir():
-                    continue
-
-                # Check if this is already a DLC folder
-                if game_dir.name == "DLC":
-                    # Move DLC folder contents up one level to parent directory
-                    for file_path in game_dir.glob("*"):
-                        if file_path.is_file() and "[DLC]" in file_path.name:
-                            # Try to find parent for each DLC file
-                            parent_folder = find_dlc_parent_folder(
-                                file_path.name, game_folders
-                            )
-
-                            if parent_folder:
-                                # Create DLC folder in the parent game folder if it doesn't exist
-                                dlc_folder = parent_folder / "DLC"
-                                dlc_folder.mkdir(exist_ok=True)
-
-                                # Move DLC file to the parent folder's DLC folder
-                                target_path = dlc_folder / file_path.name
-
-                                # Handle name conflicts
-                                counter = 1
-                                while target_path.exists():
-                                    name, ext = file_path.stem, file_path.suffix
-                                    target_path = dlc_folder / f"{name}_{counter}{ext}"
-                                    counter += 1
-
-                                try:
-                                    shutil.move(str(file_path), str(target_path))
-                                    logging.info(
-                                        f"Moved DLC file: {file_path.name} to {target_path}"
-                                    )
-                                except Exception as e:
-                                    logging.error(
-                                        f"Error moving DLC file {file_path.name}: {e}"
-                                    )
-
-                    # Remove DLC folder if empty after moving files
-                    if not any(game_dir.iterdir()):
-                        try:
-                            shutil.rmtree(str(game_dir))
-                            logging.info(f"Removed empty DLC folder: {game_dir}")
-                        except Exception as e:
-                            logging.error(f"Error removing DLC folder {game_dir}: {e}")
-                    continue
-
-                # Check if this folder contains only DLC files
-                has_non_dlc = False
-                has_dlc = False
-                for file_path in game_dir.glob("*.nsp"):
-                    if file_path.is_file():
-                        if "[DLC]" in file_path.name:
-                            has_dlc = True
-                        else:
-                            has_non_dlc = True
-                            break
-
-                # If the folder has only DLC files, treat it as a DLC-only folder
-                if has_dlc and not has_non_dlc:
-                    # Check each DLC file for its parent folder
-                    for file_path in game_dir.glob("*[DLC]*.nsp"):
-                        if file_path.is_file():
-                            # Find best match parent folder
-                            parent_folder = find_dlc_parent_folder(
-                                file_path.name, game_folders
-                            )
-
-                            if parent_folder and parent_folder != game_dir:
-                                # Create DLC folder in the parent game folder if it doesn't exist
-                                dlc_folder = parent_folder / "DLC"
-                                dlc_folder.mkdir(exist_ok=True)
-
-                                # Move DLC file to the parent folder's DLC folder
-                                target_path = dlc_folder / file_path.name
-
-                                # Handle name conflicts
-                                counter = 1
-                                while target_path.exists():
-                                    name, ext = file_path.stem, file_path.suffix
-                                    target_path = dlc_folder / f"{name}_{counter}{ext}"
-                                    counter += 1
-
-                                try:
-                                    shutil.move(str(file_path), str(target_path))
-                                    logging.info(
-                                        f"Moved DLC file: {file_path.name} to {parent_folder.name}/DLC/"
-                                    )
-                                except Exception as e:
-                                    logging.error(
-                                        f"Error moving DLC file {file_path.name}: {e}"
-                                    )
-
-                    # Remove DLC-only folder if it's now empty
-                    if not any(p.is_file() for p in game_dir.rglob("*")):
-                        try:
-                            shutil.rmtree(str(game_dir))
-                            logging.info(f"Removed empty folder: {game_dir.name}")
-                        except Exception as e:
-                            logging.error(f"Error removing folder {game_dir.name}: {e}")
-
-                # For regular game folders, ensure all their DLC is in a DLC subfolder
-                else:
-                    # Check for nested DLC folder
-                    dlc_dir = game_dir / "DLC"
-                    if dlc_dir.exists() and dlc_dir.is_dir():
-                        # Make sure there's no nested DLC/DLC folder
-                        nested_dlc = dlc_dir / "DLC"
-                        if nested_dlc.exists() and nested_dlc.is_dir():
-                            # Move all files from nested DLC up one level
-                            for file_path in nested_dlc.glob("*"):
-                                if file_path.is_file():
-                                    # Move to parent DLC folder
-                                    target_path = dlc_dir / file_path.name
-
-                                    # Handle name conflicts
-                                    counter = 1
-                                    while target_path.exists():
-                                        base, ext = file_path.stem, file_path.suffix
-                                        target_path = dlc_dir / f"{base}_{counter}{ext}"
-                                        counter += 1
-
-                                    try:
-                                        shutil.move(str(file_path), str(target_path))
-                                        logging.info(
-                                            f"Fixed nested DLC: {file_path.name}"
-                                        )
-                                    except Exception as e:
-                                        logging.error(
-                                            f"Error fixing nested DLC {file_path.name}: {e}"
-                                        )
-
-                            # Remove nested DLC folder if empty
-                            if not any(nested_dlc.iterdir()):
-                                try:
-                                    shutil.rmtree(str(nested_dlc))
-                                    logging.info("Removed empty nested DLC folder")
-                                except Exception as e:
-                                    logging.error(
-                                        f"Error removing nested DLC folder: {e}"
-                                    )
-
-                    # Find any DLC files not in the DLC folder and move them
-                    dlc_files = []
-                    for file_path in game_dir.glob("*[DLC]*.nsp"):
-                        if file_path.is_file() and file_path.parent != dlc_dir:
-                            dlc_files.append(file_path)
-
-                    if dlc_files:
-                        # Create DLC folder if it doesn't exist
-                        dlc_dir.mkdir(exist_ok=True)
-
-                        # Move DLC files
-                        for file_path in dlc_files:
-                            target_path = dlc_dir / file_path.name
-
-                            # Handle name conflicts
-                            counter = 1
-                            orig_name = target_path.name
-                            while target_path.exists():
-                                name, ext = Path(orig_name).stem, Path(orig_name).suffix
-                                target_path = dlc_dir / f"{name}_{counter}{ext}"
-                                counter += 1
-
-                            try:
-                                shutil.move(str(file_path), str(target_path))
-                                logging.info(
-                                    f"Moved DLC file to subfolder: {file_path.name}"
-                                )
-                            except Exception as e:
-                                logging.error(
-                                    f"Error moving DLC file {file_path.name}: {e}"
-                                )
-
-        except Exception as e:
-            logging.error(f"Error organizing DLC folders: {e}")
-            raise
+        """Deprecated legacy DLC organizer — quarantined."""
+        logging.warning("organize_dlc_folders is deprecated; worker handles DLC organization.")
 
     def remove_unwanted_files(self, directory: str) -> None:
         """Remove unwanted content files."""
@@ -4253,7 +3509,6 @@ class DragDropWindow(QMainWindow):
                         elif (
                             file_path.name == "Icon\r"
                             or file_path.name == "Icon\015"
-                            or file_path.name.startswith("Icon")
                         ):
                             safe_unlink(file_path, allowed_roots, Path(directory))
                             logging.info(f"Deleted Icon file: {file_path}")

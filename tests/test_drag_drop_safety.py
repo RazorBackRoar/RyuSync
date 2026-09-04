@@ -81,12 +81,17 @@ def test_should_clean_file_identifies_url_and_system_metadata() -> None:
     assert should_clean_file(Path("test.URL")) is True
     assert should_clean_file(Path("desktop.ini")) is True
     assert should_clean_file(Path(".ds_store")) is True
+    assert should_clean_file(Path("Icon\r")) is True
+    assert should_clean_file(Path("icon\r")) is True
 
-    # Other file types should NOT be cleaned
+    # Other file types should NOT be cleaned, including valid files starting with icon
     assert should_clean_file(Path("readme.txt")) is False
     assert should_clean_file(Path("game.nsp")) is False
     assert should_clean_file(Path("cover.jpg")) is False
     assert should_clean_file(Path("video.mp4")) is False
+    assert should_clean_file(Path("icon.png")) is False
+    assert should_clean_file(Path("Icon.jpg")) is False
+    assert should_clean_file(Path("icon_banner.png")) is False
 
 
 def test_multi_drop_rejects_unsupported_files_without_moving_them(

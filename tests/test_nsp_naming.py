@@ -167,10 +167,10 @@ def test_apply_renaming_rules_on_worker_and_window(
     worker_res = worker._apply_renaming_rules(filename)
     assert worker_res == expected_worker
 
-    # 2. Test main window renaming
+    # 2. Test main window renaming (now unified with worker)
     window = DragDropWindow()
     try:
         window_res = window.apply_renaming_rules(filename)
-        assert window_res == expected_window
+        assert window_res == expected_worker
     finally:
         window.close()

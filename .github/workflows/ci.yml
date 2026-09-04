@@ -47,6 +47,9 @@ jobs:
         working-directory: app
         run: uv run ty check src --python-version 3.14
 
+      - name: Install unar for archive extraction tests
+        run: brew install unar
+
       - name: Tests
         working-directory: app
         run: uv run pytest tests/ -q

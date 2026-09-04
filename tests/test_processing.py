@@ -215,3 +215,35 @@ def test_remove_versions_from_path_cleans_extra_spaces(
 
     assert new_path.name == "My Game Extra.nsp"
     mock_rename.assert_called_once_with(Path("My Game Extra.nsp"))
+
+
+def test_identical_duplicate_source_is_cleaned_up_not_orphaned(
+    tmp_path: Path,
+    qapp: QApplication,
+) -> None:
+    """When an identical file exists, the source duplicate should be removed, not left orphaned."""
+    directory = tmp_path / "drop"
+    directory.mkdir()
+    sub1 = directory / "sub1"
+    sub2 = directory / "sub2"
+    sub1.mkdir()
+    sub2.mkdir()
+
+    file1 = sub1 / "Game [0100A77018EA0000].nsp"
+    file2 = sub2 / "Game [0100A77018EA0000].nsp"
+    file1.write_bytes(b"SAME_CONTENT_BYTES")
+    file2.write_bytes(b"SAME_CONTENT_BYTES")
+
+    worker = FolderProcessingWorker()
+    summary = worker.process_folder_logic(directory)
+    assert "Successfully processed" in summary
+
+    # Only one organized game folder should exist
+    game_folders = [p for p in directory.iterdir() if p.is_dir() and not p.name.startswith("_")]
+    assert len(game_folders) == 1
+    organized_files = list(game_folders[0].glob("*.nsp"))
+    assert len(organized_files) == 1
+
+    # Root should have NO orphan nsp files left
+    root_files = [p for p in directory.iterdir() if p.is_file()]
+    assert len(root_files) == 0
