@@ -281,7 +281,7 @@ dependencies = [
     { name = "pyside6" },
 ]
 wheels = [
-    { filename = "razorcore-1.211.0-py3-none-any.whl", hash = "sha256:6a7795c28b5166cce63b4e2d847e9ddaf22ff212374ed40d1d961906cebea9d0" },
+    { filename = "razorcore-1.211.0-py3-none-any.whl", hash = "sha256:dc74d808b7e30403ffc8fad6a07f265719ce71ac3f0ac35fe08277864e28efa8" },
 ]
 
 [package.metadata]
